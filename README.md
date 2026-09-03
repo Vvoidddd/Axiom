@@ -16,8 +16,10 @@ descriptors, paths, directories, mounts, enforced ownership and permissions,
 sparse writes, quotas, links, locks, and recovery tests. Physical disks remain
 read-only by default. Phase 3 development has begun on `daily` with syscall ABI
 v1, a bounded process table, identity/state tracking, sleep/yield/exit semantics,
-and scheduler accounting. Ring 3, address-space switching, and user ELF execution
-are not complete yet, so the interactive shell still runs in the kernel.
+and scheduler accounting. A validated static ELF64 program is loaded from the
+VFS, mapped into a separate CR3, executed at CPL3, and returned through the
+`int 0x80` gate. Bounded pipes, events, and shared memory are also tested. Full
+context switching and the interactive user shell are still in progress.
 
 ## Build on Windows with Arch WSL
 
@@ -125,6 +127,8 @@ doing that safely requires the future physical memory manager.
 - `src/storage.c`, `src/ahci.c`, and `src/nvme.c` discover storage and implement read-only hardware I/O.
 - `src/vfs.c` provides the file, directory, descriptor, path, and mount API.
 - `src/process.c` provides the Phase 3 syscall/process/scheduler foundation.
+- `src/elf.c` validates and maps static x86-64 ELF programs from the VFS.
+- `src/ipc.c` provides bounded pipes, process events, and shared memory.
 - `src/fat32.c` implements bounded read-only FAT32 directories, VFAT names, and file reads.
 - `src/axiomfs.c` implements AxiomFS v2 persistence, journaling, checking, and repair.
 - `linker.ld`, `limine.conf`, and `Makefile` define the kernel and boot image.

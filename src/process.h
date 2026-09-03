@@ -47,5 +47,7 @@ uint32_t process_count(void);
 bool process_info_at(uint32_t index, struct process_info *out);
 const char *process_state_name(enum process_state state);
 bool process_self_test(void);
+bool process_user_mode_self_test(void);
+bool process_user_mode_ready(void);
 
 #endif

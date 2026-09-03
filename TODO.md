@@ -71,11 +71,11 @@ and appended to this log after its build and firmware tests pass.
 
 ## Phase 3: Processes and User Space
 
-- [ ] Define a stable syscall ABI and enter user mode through ring 3.
-- [ ] Load static ELF executables from the virtual filesystem.
+- [x] Define a stable syscall ABI and enter user mode through ring 3.
+- [x] Load static ELF executables from the virtual filesystem.
 - [ ] Implement processes, threads, preemptive scheduling, sleep, and termination.
-- [ ] Give each process an isolated address space with copy and permission validation.
-- [ ] Add pipes, signals or events, shared memory, and basic inter-process communication.
+- [x] Give each process an isolated address space with copy and permission validation.
+- [x] Add pipes, signals or events, shared memory, and basic inter-process communication.
 - [ ] Create an `init` process and move the command shell out of the kernel.
 - [ ] Build a small C standard library and an Axiom user-space SDK/toolchain.
 - [ ] Establish application packages, manifests, versioning, and safe installation rules.

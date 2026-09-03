@@ -34,12 +34,22 @@ int memcmp(const void *a, const void *b, size_t n) {
 #define PAGE_SIZE 4096ull
 #define PTE_PRESENT 1ull
 #define PTE_WRITE 2ull
+#define PTE_USER 4ull
 #define PTE_NX (1ull<<63)
 struct free_page { struct free_page *next; };
 static struct free_page *free_head;
 static uint64_t direct_offset, free_count, used_count;
 static uint64_t next_virtual=0xffffc00000000000ull, heap_used;
+static void *physical_pointer(uint64_t physical);
 static uint64_t *leaf_entry(uint64_t virtual_address);
+static uint64_t *next_table(uint64_t *table,unsigned index,bool create);
+static uint64_t *leaf_entry_root(uint64_t root,uint64_t virtual_address,bool create,uint64_t flags){
+    uint64_t*pml4=physical_pointer(root&~0xfffull);unsigned a=(virtual_address>>39)&511,b=(virtual_address>>30)&511,c=(virtual_address>>21)&511;
+    uint64_t*pdpt=next_table(pml4,a,create);if(!pdpt)return 0;if(flags&PTE_USER)pml4[a]|=PTE_USER;
+    uint64_t*pd=next_table(pdpt,b,create);if(!pd)return 0;if(flags&PTE_USER)pdpt[b]|=PTE_USER;
+    uint64_t*pt=next_table(pd,c,create);if(!pt)return 0;if(flags&PTE_USER)pd[c]|=PTE_USER;
+    return &pt[(virtual_address>>12)&511];
+}
 
 static void *physical_pointer(uint64_t physical){ return (void *)(uintptr_t)(physical+direct_offset); }
 void *pmm_direct_map(uint64_t physical){return physical_pointer(physical);}
@@ -73,11 +83,40 @@ static uint64_t *next_table(uint64_t *table,unsigned index,bool create){
 }
 bool vmm_map(uint64_t virtual_address,uint64_t physical_address,uint64_t flags){
     uint64_t cr3;__asm__ volatile("mov %%cr3,%0":"=r"(cr3));uint64_t *pml4=physical_pointer(cr3&~0xfffull);
-    uint64_t *pdpt=next_table(pml4,(virtual_address>>39)&511,true);if(!pdpt)return false;
-    uint64_t *pd=next_table(pdpt,(virtual_address>>30)&511,true);if(!pd)return false;
-    uint64_t *pt=next_table(pd,(virtual_address>>21)&511,true);if(!pt)return false;
+    unsigned pml4i=(virtual_address>>39)&511,pdpti=(virtual_address>>30)&511,pdi=(virtual_address>>21)&511;
+    uint64_t *pdpt=next_table(pml4,pml4i,true);if(!pdpt)return false;if(flags&PTE_USER)pml4[pml4i]|=PTE_USER;
+    uint64_t *pd=next_table(pdpt,pdpti,true);if(!pd)return false;if(flags&PTE_USER)pdpt[pdpti]|=PTE_USER;
+    uint64_t *pt=next_table(pd,pdi,true);if(!pt)return false;if(flags&PTE_USER)pd[pdi]|=PTE_USER;
     pt[(virtual_address>>12)&511]=(physical_address&~0xfffull)|PTE_PRESENT|flags;
     __asm__ volatile("invlpg (%0)"::"r"(virtual_address):"memory");return true;
+}
+bool vmm_map_user(uint64_t virtual_address,uint64_t physical_address,bool writable,bool executable){
+    if(virtual_address>=0x0000800000000000ull||(virtual_address&0xfff)||(physical_address&0xfff))return false;
+    return vmm_map(virtual_address,physical_address,PTE_USER|(writable?PTE_WRITE:0)|(executable?0:PTE_NX));
+}
+bool vmm_user_range_valid(uint64_t address,size_t bytes,bool writable){
+    if(!bytes)return true;
+    if(address>=0x0000800000000000ull||bytes>0x0000800000000000ull-address)return false;
+    uint64_t first=address&~0xfffull,last=(address+bytes-1)&~0xfffull;
+    for(uint64_t page=first;;page+=PAGE_SIZE){uint64_t*entry=leaf_entry(page);if(!entry||!(*entry&PTE_PRESENT)||!(*entry&PTE_USER)||(writable&&!(*entry&PTE_WRITE)))return false;if(page==last)break;}
+    return true;
+}
+bool vmm_space_create(struct vmm_space*space){
+    if(!space)return false;
+    uint64_t root=pmm_alloc();if(!root)return false;uint64_t current;__asm__ volatile("mov %%cr3,%0":"=r"(current));
+    uint64_t*destination=physical_pointer(root),*source=physical_pointer(current&~0xfffull);for(unsigned i=256;i<512;i++)destination[i]=source[i];
+    space->root_physical=root;return true;
+}
+bool vmm_space_map_user(struct vmm_space*space,uint64_t virtual_address,uint64_t physical_address,bool writable,bool executable){
+    if(!space||!space->root_physical||virtual_address>=0x0000800000000000ull||(virtual_address&0xfff)||(physical_address&0xfff))return false;
+    uint64_t flags=PTE_USER|(writable?PTE_WRITE:0)|(executable?0:PTE_NX),*entry=leaf_entry_root(space->root_physical,virtual_address,true,flags);if(!entry)return false;
+    *entry=(physical_address&~0xfffull)|PTE_PRESENT|flags;return true;
+}
+bool vmm_space_user_range_valid(const struct vmm_space*space,uint64_t address,size_t bytes,bool writable){
+    if(!space||!space->root_physical)return false;
+    if(!bytes)return true;
+    if(address>=0x0000800000000000ull||bytes>0x0000800000000000ull-address)return false;
+    uint64_t first=address&~0xfffull,last=(address+bytes-1)&~0xfffull;for(uint64_t page=first;;page+=PAGE_SIZE){uint64_t*entry=leaf_entry_root(space->root_physical,page,false,0);if(!entry||!(*entry&PTE_PRESENT)||!(*entry&PTE_USER)||(writable&&!(*entry&PTE_WRITE)))return false;if(page==last)break;}return true;
 }
 void *vmm_map_mmio(uint64_t physical_address,size_t bytes){
     if(!bytes)return 0;

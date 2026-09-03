@@ -90,7 +90,42 @@ ISR_ERR 30
 ISR_NOERR 31
 ISR_NOERR 32
 ISR_NOERR 33
+ISR_NOERR 128
 ISR_NOERR 255
+
+.section .bss
+.align 8
+user_kernel_rsp: .quad 0
+user_kernel_cr3: .quad 0
+
+.section .text
+.global arch_enter_user
+arch_enter_user:
+    movq %rsp,user_kernel_rsp(%rip)
+    movq %cr3,%rax
+    movq %rax,user_kernel_cr3(%rip)
+    movq %rdx,%cr3
+    movw $0x2b,%ax
+    movw %ax,%ds
+    movw %ax,%es
+    pushq $0x2b
+    pushq %rsi
+    pushfq
+    orq $0x200,(%rsp)
+    pushq $0x33
+    pushq %rdi
+    iretq
+
+.global arch_return_from_user
+arch_return_from_user:
+    movq %rdi,%rax
+    movq user_kernel_cr3(%rip),%rcx
+    movq %rcx,%cr3
+    movq user_kernel_rsp(%rip),%rsp
+    movw $0x10,%dx
+    movw %dx,%ds
+    movw %dx,%es
+    ret
 
 .section .rodata
 .global isr_stub_table

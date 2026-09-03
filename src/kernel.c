@@ -247,7 +247,7 @@ static void cmd_mkfs(const char*a){if(!streq(a,"ram0")){console_write("REFUSING:
 static void cmd_storagetest(const char*a){(void)a;bool ok=storage_self_test();struct block_device*d=block_device_at(0);ok=ok&&axiomfs_self_test(d);ok=ok&&!axiomfs_simulate_interrupted_write(d,0);ok=ok&&axiomfs_check(d,0,false)==-2;ok=ok&&!axiomfs_check(d,0,true);ok=ok&&fat32_self_test(d);ok=ok&&vfs_self_test();ok=ok&&vfs_open("/does/not/exist",VFS_READ)==VFS_ENOENT;console_write(ok?"PHASE 2 STORAGE RECOVERY TESTS: PASS\n":"PHASE 2 STORAGE RECOVERY TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 2 STORAGE RECOVERY TESTS");}
 static void cmd_hwstoragetest(const char*a){(void)a;uint32_t tested=0;bool ok=storage_hardware_self_test(&tested);console_write(ok?"HARDWARE STORAGE READ TEST: PASS, DEVICES=":"HARDWARE STORAGE READ TEST: FAIL, DEVICES=");console_write_u64(tested);console_putc('\n');log_write(ok?"PASS":"FAIL","HARDWARE STORAGE DEVICE ATTACHED AND READ ONLY");}
 static void cmd_ps(const char*a){(void)a;console_write("PID PPID UID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
-static void cmd_proctest(const char*a){(void)a;bool ok=process_self_test();console_write(ok?"PHASE 3 PROCESS AND SYSCALL FOUNDATION: PASS\n":"PHASE 3 PROCESS AND SYSCALL FOUNDATION: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 PROCESS AND SYSCALL FOUNDATION");}
+static void cmd_proctest(const char*a){(void)a;bool ok=process_self_test()&&process_user_mode_ready();console_write(ok?"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: PASS\n":"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 RING3 PROCESS AND SYSCALL TESTS");}
 static void cmd_rescan(const char*a){(void)a;pci_init();storage_probe_hardware();console_write("PCI AND STORAGE RESCAN COMPLETE.\n");}
 static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}if(keyboard_set_layout(args))console_write("KEYBOARD LAYOUT CHANGED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
 static void cmd_run(const char *args){char script[128];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
@@ -394,6 +394,8 @@ void kmain(void) {
     log_init();
     arch_use_guarded_ist(vmm_guarded_stack(4));
     arch_init(hhdm_request.response?hhdm_request.response->offset:0);
+    if(!process_user_mode_self_test())panic("ring 3 syscall probe failed",0,0,0);
+    LOG_INFO("ring 3 ELF syscall and IPC probe passed");
     storage_probe_hardware();
     smp_start(mp_request.response);
     console_write("AXIOM V0.4\nYOUR SYSTEM. YOUR RULES.\nTYPE HELP FOR COMMANDS.\n\n");

@@ -1,5 +1,9 @@
 #include "process.h"
 #include "hardware.h"
+#include "memory.h"
+#include "elf.h"
+#include "vfs.h"
+#include "ipc.h"
 
 struct process_slot {
     struct process_info info;
@@ -9,6 +13,26 @@ struct process_slot {
 static struct process_slot table[PROCESS_MAX];
 static uint32_t current_slot;
 static uint32_t next_pid;
+static bool user_mode_ok;
+extern uint64_t arch_enter_user(uint64_t entry,uint64_t stack,uint64_t address_space);
+
+static const uint8_t user_probe[] = {
+    0x48,0x31,0xc0,                         /* xor rax,rax: ABI version */
+    0xcd,0x80,                              /* int 0x80 */
+    0x48,0x83,0xf8,0x01,                   /* cmp rax,1 */
+    0x75,0x17,                              /* jne fail */
+    0x48,0xc7,0xc0,0x01,0x00,0x00,0x00,   /* mov rax,SYS_GETPID */
+    0xcd,0x80,                              /* int 0x80 */
+    0x48,0x85,0xc0,                         /* test rax,rax */
+    0x74,0x09,                              /* je fail */
+    0x48,0xc7,0xc7,0x01,0x00,0x00,0x00,   /* mov rdi,1 */
+    0xeb,0x07,                              /* jmp return */
+    0x48,0x31,0xff,                         /* fail: xor rdi,rdi */
+    0x90,0x90,0x90,0x90,                   /* padding */
+    0x48,0xc7,0xc0,0x10,0xa7,0x00,0x00,   /* return: mov rax,0xa710 */
+    0xcd,0x80,                              /* int 0x80 */
+    0xf4                                    /* hlt if kernel fails to return */
+};
 
 static void copy_name(char *destination, const char *source) {
     size_t i = 0;
@@ -41,6 +65,7 @@ void process_init(void) {
     int shell = create_process("kernel-shell", 1, 0, 0);
     current_slot = shell >= 0 ? (uint32_t)shell : (uint32_t)init;
     table[current_slot].info.state = PROCESS_RUNNING;
+    ipc_init();
 }
 
 static void schedule(void) {
@@ -123,3 +148,14 @@ bool process_self_test(void) {
     if (process_syscall(SYS_SLEEP, 86400001u, 0, 0, 0) != -22) return false;
     return process_syscall(SYS_YIELD, 0, 0, 0, 0) == 0 && process_count() == 2;
 }
+
+bool process_user_mode_self_test(void){
+    struct test_elf{uint8_t ident[16];uint16_t type,machine;uint32_t version;uint64_t entry,phoff,shoff;uint32_t flags;uint16_t ehsize,phentsize,phnum,shentsize,shnum,shstrndx;uint32_t ptype,pflags;uint64_t offset,vaddr,paddr,filesz,memsz,align;uint8_t padding[0x1000-120];uint8_t code[sizeof(user_probe)];}__attribute__((packed));
+    struct test_elf file={.ident={0x7f,'E','L','F',2,1,1},.type=2,.machine=0x3e,.version=1,.entry=0x400000,.phoff=64,.ehsize=64,.phentsize=56,.phnum=1,.ptype=1,.pflags=5,.offset=0x1000,.vaddr=0x400000,.filesz=sizeof(user_probe),.memsz=sizeof(user_probe),.align=4096};for(size_t i=0;i<sizeof(user_probe);i++)file.code[i]=user_probe[i];
+    int directory=vfs_mkdir("/system/bin",0755);if(directory&&directory!=VFS_EEXIST)return false;
+    int fd=vfs_open("/system/bin/ring3-test",VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0||vfs_write(fd,&file,sizeof(file))!=(long)sizeof(file)||vfs_close(fd))return false;
+    struct user_image image;if(elf_load_vfs("/system/bin/ring3-test",&image)||vmm_user_range_valid(0x400000,1,false))return false;
+    user_mode_ok=arch_enter_user(image.entry,image.stack_top,image.space.root_physical)==1&&ipc_self_test();
+    return user_mode_ok;
+}
+bool process_user_mode_ready(void){return user_mode_ok;}
