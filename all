@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+
+set -eu
+
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$project_dir"
+
+missing=""
+for command_name in make gcc ld curl tar xorriso; do
+    if ! command -v "$command_name" >/dev/null 2>&1; then
+        missing="$missing $command_name"
+    fi
+done
+
+if [ -n "$missing" ]; then
+    printf 'Axiom build error: missing required commands:%s\n' "$missing" >&2
+    printf 'On Arch WSL, install them with:\n' >&2
+    printf '  sudo pacman -S --needed base-devel curl xorriso\n' >&2
+    exit 1
+fi
+
+printf 'Cleaning previous Axiom build outputs...\n'
+make clean
+
+printf 'Building Axiom kernel and hybrid BIOS/UEFI ISO...\n'
+make iso
+
+mv -f build/axiom.iso ./axiom.iso
+
+printf '\nAxiom build complete:\n'
+printf '  %s/axiom.iso\n' "$project_dir"

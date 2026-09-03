@@ -1,0 +1,25 @@
+name: Stable release
+
+on:
+  push:
+    tags:
+      - 'stable-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl xorriso
+      - name: Build stable ISO
+        run: ./all
+      - name: Create checksum
+        run: sha256sum axiom.iso > axiom.iso.sha256
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" axiom.iso axiom.iso.sha256 --verify-tag --generate-notes --title "Axiom ${GITHUB_REF_NAME#stable-}"

@@ -1,0 +1,6 @@
+/build/
+*.iso
+*.img
+*.log
+*.sha256
+.vscode/
