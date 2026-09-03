@@ -8,6 +8,17 @@ static volatile unsigned key_read, key_write;
 static bool shift_down, caps_lock;
 static bool extended;
 static unsigned layout;
+
+static uint64_t interrupt_save(void) {
+    uint64_t flags;
+    __asm__ volatile ("pushfq; popq %0; cli" : "=r" (flags) :: "memory");
+    return flags;
+}
+
+static void interrupt_restore(uint64_t flags) {
+    __asm__ volatile ("pushq %0; popfq" :: "r" (flags) : "memory", "cc");
+}
+
 static const char keymap[128] = {
     [2]='1',[3]='2',[4]='3',[5]='4',[6]='5',[7]='6',[8]='7',[9]='8',[10]='9',[11]='0',
     [12]='-',[13]='=',[14]='\b',[15]='\t',[16]='q',[17]='w',[18]='e',[19]='r',[20]='t',
@@ -44,8 +55,22 @@ void pit_wait_ms(uint32_t milliseconds) {
 char keyboard_read_char(void) {
     for(;;){struct key_event event=keyboard_read_event();if(event.pressed&&event.character)return event.character;}
 }
-struct key_event keyboard_read_event(void){for(;;){__asm__ volatile("cli");if(key_read!=key_write){struct key_event e=key_queue[key_read++&127];__asm__ volatile("sti");return e;}__asm__ volatile("sti; hlt");}}
-bool keyboard_poll_event(struct key_event*event){if(!event)return false;bool found=false;__asm__ volatile("cli");if(key_read!=key_write){*event=key_queue[key_read++&127];found=true;}__asm__ volatile("sti");return found;}
+struct key_event keyboard_read_event(void){
+    for(;;){
+        uint64_t flags=interrupt_save();
+        if(key_read!=key_write){struct key_event e=key_queue[key_read++&127];interrupt_restore(flags);return e;}
+        if(flags&(1ull<<9))__asm__ volatile("sti; hlt" ::: "memory");
+        else __asm__ volatile("pause");
+    }
+}
+bool keyboard_poll_event(struct key_event*event){
+    if(!event)return false;
+    bool found=false;
+    uint64_t flags=interrupt_save();
+    if(key_read!=key_write){*event=key_queue[key_read++&127];found=true;}
+    interrupt_restore(flags);
+    return found;
+}
 static bool same(const char *a,const char *b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
 bool keyboard_set_layout(const char *name){if(same(name,"us")){layout=0;return true;}if(same(name,"dvorak")){layout=1;return true;}return false;}
 const char *keyboard_layout_name(void){return layout?"dvorak":"us";}
