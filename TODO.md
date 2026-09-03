@@ -48,7 +48,7 @@ tests on both BIOS and UEFI.
 - [x] Add read-only AHCI/SATA and NVMe drivers and QEMU hardware-device tests.
 - [x] Persist the AxiomFS tree, timestamps, ownership, modes, links, extended attributes, sparse data, and quotas.
 - [x] Validate MBR/GPT parsing, damaged metadata repair, cache/device loss, and write-disabled physical disks.
-- [x] Add public stable and private daily publishing scripts plus automated stable ISO Releases.
+- [x] Add stable and daily branch publishing scripts plus automated stable ISO Releases.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 

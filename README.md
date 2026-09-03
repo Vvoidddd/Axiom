@@ -167,10 +167,10 @@ not claimed as verified.
 
 ## Publishing stable and daily builds
 
-GitHub visibility applies to repositories, not individual tags. Axiom therefore
-uses a public `Vvoidddd/Axiom` repository for stable code and Releases and a
-separate private `Vvoidddd/Axiom-daily` repository for daily source snapshots.
-After authenticating GitHub and adding remotes named `stable` and `daily`, use:
+The single public `Vvoidddd/Axiom` repository uses a protected-purpose `stable`
+branch for tested releases and a `daily` branch for ongoing work. GitHub applies
+visibility to the whole repository, so both branches are public. With the
+repository configured as the `origin` remote, use:
 
 ```sh
 ./scripts/publish-daily.sh
@@ -180,5 +180,5 @@ After authenticating GitHub and adding remotes named `stable` and `daily`, use:
 Stable tags have the form `stable-vMAJOR.MINOR.PATCH`. Pushing one triggers the
 stable-release workflow, performs a clean build, and uploads `axiom.iso` plus
 its SHA-256 checksum to a GitHub Release. The build workflow also preserves an
-ISO artifact for each push to public `main`. The daily repository must remain
-private for its tags and code to remain visible only to its owner/collaborators.
+ISO artifact for pushes to `daily` and `stable`. Daily snapshots never update
+the stable branch; only `publish-stable.sh` does that.

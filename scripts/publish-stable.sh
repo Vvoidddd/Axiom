@@ -10,7 +10,7 @@ fi
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root"
 git diff --quiet && git diff --cached --quiet || { echo "commit all changes before publishing stable" >&2; exit 1; }
-git remote get-url stable >/dev/null 2>&1 || { echo "missing 'stable' remote (public Vvoidddd/Axiom)" >&2; exit 1; }
+git remote get-url origin >/dev/null 2>&1 || { echo "missing 'origin' remote (Vvoidddd/Axiom)" >&2; exit 1; }
 
 ./all
 if command -v qemu-system-x86_64 >/dev/null 2>&1; then
@@ -22,5 +22,5 @@ fi
 tag="stable-$version"
 git rev-parse "$tag" >/dev/null 2>&1 && { echo "tag $tag already exists" >&2; exit 1; }
 git tag -a "$tag" -m "Axiom stable $version"
-git push stable HEAD:main "$tag"
-echo "Pushed stable source and $tag. GitHub Actions will attach axiom.iso to the Release."
+git push origin HEAD:stable "$tag"
+echo "Pushed stable source to the stable branch and $tag. GitHub Actions will attach axiom.iso to the Release."
