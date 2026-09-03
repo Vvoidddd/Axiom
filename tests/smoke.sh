@@ -17,7 +17,7 @@ run_case(){
  grep -q 'GDT TSS IDT PIC APIC and IRQ devices online' "$log";grep -q 'application processors entered idle scheduler' "$log";grep -q "\[CMD\] $command" "$log"
  if [[ $command == fault ]];then grep -q '\[ERROR\] CPU exception' "$log";grep -q 'VECTOR=0x0000000000000006' "$log"
  elif [[ $command == storagetest ]];then grep -q '\[PASS\] PHASE 2 STORAGE RECOVERY TESTS' "$log";grep -q '\[INFO\] reboot requested' "$log"
- else grep -q '\[CMD\] version' "$log";grep -q '\[CMD\] heaptest' "$log";grep -q '\[INFO\] reboot requested' "$log";fi
+ else grep -q '\[CMD\] version' "$log";grep -q '\[CMD\] heaptest' "$log";grep -q '\[PASS\] PHASE 3 PROCESS AND SYSCALL FOUNDATION' "$log";grep -q '\[INFO\] reboot requested' "$log";fi
  echo "PASS: $name"
 }
 run_case bios-commands bios 'script demo'
@@ -26,4 +26,4 @@ run_case bios-storage bios storagetest
 run_case uefi-storage uefi storagetest
 run_case bios-fault bios fault
 run_case uefi-fault uefi fault
-echo "All Axiom Phase 1 and Phase 2 storage smoke tests passed."
+echo "All Axiom Phase 1/2 and Phase 3 foundation smoke tests passed."

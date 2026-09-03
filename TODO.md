@@ -55,25 +55,19 @@ tests on both BIOS and UEFI.
 Phase 1 was completed and verified on BIOS and UEFI in QEMU. Its individual
 deliverables are recorded in the completed section above.
 
-## Phase 2: Storage and Files
+## Phase 2: Storage and Files — Completed
 
-- [x] Enumerate PCI devices through legacy configuration space; add PCIe ECAM enumeration when MCFG hardware testing is available.
-- [x] Add AHCI/SATA and NVMe block-device drivers, starting with read-only operation.
-- [x] Add a block cache and partition parsing for GPT and MBR.
-- [x] Implement a virtual filesystem interface with files, directories, and mount points.
-- [x] Add an initramfs so essential programs and configuration ship with the kernel.
-- [x] Add read-only FAT32 first for interoperability and safe driver validation.
-- [x] Persist the AxiomFS file/directory tree, timestamps, ownership, permissions, links, and extended attributes on disk.
-- [x] Add an AxiomFS formatter, consistency checker, repair tool, and versioned on-disk format.
-- [x] Implement journaled metadata so interrupted writes cannot silently corrupt the disk.
-- [x] Add safe read/write support, atomic rename, file locking, sparse files, and storage quotas.
-- [x] Define the standard directory layout: `/boot`, `/system`, `/apps`, `/users`, `/tmp`, `/var`, and `/devices`.
-- [x] Mount a private home directory at `/users/<name>` for each account.
-- [x] Add file-descriptor, path, permission, and error-code APIs.
-- [x] Add shell commands such as `ls`, `cd`, `pwd`, `cat`, `mkdir`, `cp`, and `rm`.
-- [x] Add `mount`, `unmount`, `df`, `du`, `chmod`, `chown`, `ln`, and filesystem-checking commands.
-- [x] Test full disks, invalid paths, damaged metadata, interrupted writes, and removable-drive loss.
-- [x] Keep physical filesystem writes disabled by default; writable operations are limited to RAM-backed test storage after recovery tests pass.
+Phase 2 was completed and verified with the BIOS/UEFI recovery matrix plus
+emulated AHCI and NVMe hardware tests. Its completed deliverables are recorded
+above; physical disks remain read-only while AxiomFS writes stay on test media.
+
+### Phase completion log
+
+- Phase 1 — Stable Terminal Kernel: completed and verified on BIOS and UEFI.
+- Phase 2 — Storage and Files: completed and verified on BIOS/UEFI, AHCI, and NVMe test fixtures.
+
+From Phase 3 onward, each completed phase is moved into the completed section
+and appended to this log after its build and firmware tests pass.
 
 ## Phase 3: Processes and User Space
 

@@ -4,6 +4,7 @@
 #include "log.h"
 #include "acpi.h"
 #include "memory.h"
+#include "process.h"
 #include <stddef.h>
 
 struct idt_entry { uint16_t low,selector; uint8_t ist,flags; uint16_t mid; uint32_t high,zero; } __attribute__((packed));
@@ -64,7 +65,7 @@ void arch_init(uint64_t hhdm) {
 }
 void arch_interrupt_dispatch(uint64_t *f) {
     uint64_t vector=f[15], error=f[16], rip=f[17]; counts[vector&255]++;
-    if(vector==32){ hardware_timer_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
+    if(vector==32){ hardware_timer_irq();process_timer_tick(hardware_uptime_ms());if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
     if(vector==33){ hardware_keyboard_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
     if(vector==255) return;
     (void)error;(void)rip;panic_frame("CPU exception",f);

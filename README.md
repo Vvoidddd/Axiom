@@ -14,7 +14,10 @@ GPT/MBR parsing, bounded read-only FAT32 traversal, a bounded in-kernel VFS,
 and the persistent AxiomFS v2 format with metadata journaling. The VFS supplies
 descriptors, paths, directories, mounts, enforced ownership and permissions,
 sparse writes, quotas, links, locks, and recovery tests. Physical disks remain
-read-only by default. There are still no processes, networking, or user mode.
+read-only by default. Phase 3 development has begun on `daily` with syscall ABI
+v1, a bounded process table, identity/state tracking, sleep/yield/exit semantics,
+and scheduler accounting. Ring 3, address-space switching, and user ELF execution
+are not complete yet, so the interactive shell still runs in the kernel.
 
 ## Build on Windows with Arch WSL
 
@@ -93,6 +96,8 @@ and scrolling. Available commands are:
 - `fatls DEVICE [PATH]` and `fatcat DEVICE PATH` — browse a detected FAT32 volume read-only
 - `storagetest` — test cache I/O, full-disk errors, invalid paths, journal interruption, and recovery
 - `hwstoragetest` and `rescan` — test or redetect attached AHCI/NVMe devices
+- `ps` — list the bounded process table and scheduler counters
+- `proctest` — validate the Phase 3 process model and syscall ABI boundaries
 - `allocstat` and `heaptest` — inspect and test kernel memory management
 - `time`, `uptime`, and `random` — show RTC, monotonic time, and entropy
 - `logs` — display the in-memory serial log history
@@ -119,6 +124,7 @@ doing that safely requires the future physical memory manager.
 - `src/block.c` provides cached block I/O and GPT/MBR discovery.
 - `src/storage.c`, `src/ahci.c`, and `src/nvme.c` discover storage and implement read-only hardware I/O.
 - `src/vfs.c` provides the file, directory, descriptor, path, and mount API.
+- `src/process.c` provides the Phase 3 syscall/process/scheduler foundation.
 - `src/fat32.c` implements bounded read-only FAT32 directories, VFAT names, and file reads.
 - `src/axiomfs.c` implements AxiomFS v2 persistence, journaling, checking, and repair.
 - `linker.ld`, `limine.conf`, and `Makefile` define the kernel and boot image.
