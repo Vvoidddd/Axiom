@@ -30,13 +30,20 @@ static void idt_set(unsigned v, void *handler, uint8_t ist) {
     idt[v]=(struct idt_entry){(uint16_t)a,0x08,ist,0x8e,(uint16_t)(a>>16),(uint32_t)(a>>32),0};
 }
 static void gdt_init(void) {
-    gdt[0]=0; gdt[1]=0x00af9a000000ffffull; gdt[2]=0x00af92000000ffffull;
+    /* Long mode (L=1, D=0) is valid only for code descriptors.  Data and
+       stack descriptors must use L=0; keeping L set can make privilege
+       transitions fail with #GP(0) while the CPU is interrupting CPL3. */
+    gdt[0]=0;
+    gdt[1]=0x00af9a000000ffffull; /* 0x08: kernel 64-bit code */
+    gdt[2]=0x00cf92000000ffffull; /* 0x10: kernel data/stack */
     if(!tss.ist[0]) tss.ist[0]=(uint64_t)(uintptr_t)(ist_stack+sizeof(ist_stack));
     tss.rsp[0]=(uint64_t)(uintptr_t)(ring0_stack+sizeof(ring0_stack));
     tss.iomap=sizeof(tss);
     uint64_t base=(uint64_t)(uintptr_t)&tss, limit=sizeof(tss)-1;
     gdt[3]=(limit&0xffff)|((base&0xffffff)<<16)|(0x89ull<<40)|(((limit>>16)&15)<<48)|(((base>>24)&255)<<56);
-    gdt[4]=base>>32;gdt[5]=0x00aff2000000ffffull;gdt[6]=0x00affa000000ffffull;
+    gdt[4]=base>>32;
+    gdt[5]=0x00cff2000000ffffull; /* 0x2b: user data/stack */
+    gdt[6]=0x00affa000000ffffull; /* 0x33: user 64-bit code */
     struct table_ptr p={sizeof(gdt)-1,(uint64_t)(uintptr_t)gdt};
     __asm__ volatile("lgdt %0\n pushq $0x08\n leaq 1f(%%rip),%%rax\n pushq %%rax\n lretq\n1:\n mov $0x10,%%ax\n mov %%ax,%%ds\n mov %%ax,%%es\n mov %%ax,%%ss\n mov $0x18,%%ax\n ltr %%ax"::"m"(p):"rax","memory");
 }
