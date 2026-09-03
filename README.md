@@ -1,6 +1,6 @@
 # Axiom
 
-Axiom v0.4 is a small educational x86-64 kernel written in freestanding C. It
+Axiom v0.5 is a small educational x86-64 operating system written in freestanding C. It
 boots with Limine on BIOS and UEFI, shows a branded splash and module-loading
 screen, discovers system hardware, and opens an interactive graphical console.
 
@@ -14,12 +14,11 @@ GPT/MBR parsing, bounded read-only FAT32 traversal, a bounded in-kernel VFS,
 and the persistent AxiomFS v2 format with metadata journaling. The VFS supplies
 descriptors, paths, directories, mounts, enforced ownership and permissions,
 sparse writes, quotas, links, locks, and recovery tests. Physical disks remain
-read-only by default. Phase 3 development has begun on `daily` with syscall ABI
-v1, a bounded process table, identity/state tracking, sleep/yield/exit semantics,
-and scheduler accounting. A validated static ELF64 program is loaded from the
-VFS, mapped into a separate CR3, executed at CPL3, and returned through the
-`int 0x80` gate. Bounded pipes, events, and shared memory are also tested. Full
-context switching and the interactive user shell are still in progress.
+read-only by default. Phase 3 adds syscall ABI v1, static ELF64 loading, isolated
+ring-3 address spaces, PIT-preempted processes and threads, sleep and lifecycle
+management, pipes, events, and shared memory. A compiled user-space `init`
+starts the primary ring-3 shell and a packaged sample application. The kernel
+console is retained only as a recovery fallback.
 
 ## Build on Windows with Arch WSL
 
@@ -100,6 +99,7 @@ and scrolling. Available commands are:
 - `hwstoragetest` and `rescan` — test or redetect attached AHCI/NVMe devices
 - `ps` — list the bounded process table and scheduler counters
 - `proctest` — validate the Phase 3 process model and syscall ABI boundaries
+- `packages` — list validated system and application package manifests
 - `allocstat` and `heaptest` — inspect and test kernel memory management
 - `time`, `uptime`, and `random` — show RTC, monotonic time, and entropy
 - `logs` — display the in-memory serial log history
@@ -129,6 +129,9 @@ doing that safely requires the future physical memory manager.
 - `src/process.c` provides the Phase 3 syscall/process/scheduler foundation.
 - `src/elf.c` validates and maps static x86-64 ELF programs from the VFS.
 - `src/ipc.c` provides bounded pipes, process events, and shared memory.
+- `src/package.c` validates ABI-compatible package manifests.
+- `user/` contains user-space `init`, shell, sample app, runtime, and linker layout.
+- `sdk/` contains the shared syscall ABI and reusable application build template.
 - `src/fat32.c` implements bounded read-only FAT32 directories, VFAT names, and file reads.
 - `src/axiomfs.c` implements AxiomFS v2 persistence, journaling, checking, and repair.
 - `linker.ld`, `limine.conf`, and `Makefile` define the kernel and boot image.

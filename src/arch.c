@@ -70,9 +70,9 @@ void arch_init(uint64_t hhdm) {
 }
 void arch_interrupt_dispatch(uint64_t *f) {
     uint64_t vector=f[15], error=f[16], rip=f[17]; counts[vector&255]++;
-    if(vector==32){ hardware_timer_irq();process_timer_tick(hardware_uptime_ms());if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
+    if(vector==32){ hardware_timer_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);process_timer_interrupt(f,hardware_uptime_ms());return; }
     if(vector==33){ hardware_keyboard_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
-    if(vector==128){if(f[14]==0xa710)arch_return_from_user(f[9]);f[14]=(uint64_t)process_syscall(f[14],f[9],f[8],f[11],f[5]);return;}
+    if(vector==128){if(f[14]==0xa710)arch_return_from_user(f[9]);if(process_syscall_interrupt(f))return;f[14]=(uint64_t)process_syscall(f[14],f[9],f[8],f[11],f[5]);return;}
     if(vector==255) return;
     (void)error;(void)rip;panic_frame("CPU exception",f);
 }

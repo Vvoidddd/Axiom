@@ -49,6 +49,14 @@ tests on both BIOS and UEFI.
 - [x] Persist the AxiomFS tree, timestamps, ownership, modes, links, extended attributes, sparse data, and quotas.
 - [x] Validate MBR/GPT parsing, damaged metadata repair, cache/device loss, and write-disabled physical disks.
 - [x] Add stable and daily branch publishing scripts plus automated stable ISO Releases.
+- [x] Define syscall ABI v1 and execute validated static ELF64 programs at ring 3.
+- [x] Give user processes isolated CR3 address spaces with validated user-copy boundaries.
+- [x] Preempt user processes and shared-address-space threads with PIT-driven context switching.
+- [x] Add process sleep/wake, yield, exit status, zombie state, PID, and TID handling.
+- [x] Add bounded pipes, process events, and shared-memory mappings.
+- [x] Start a compiled user-space `init` and make its ring-3 shell the primary console.
+- [x] Add a freestanding user runtime, shared syscall headers, linker layout, and SDK build template.
+- [x] Add validated versioned system/application manifests and a packaged ring-3 sample app.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 
@@ -65,20 +73,18 @@ above; physical disks remain read-only while AxiomFS writes stay on test media.
 
 - Phase 1 — Stable Terminal Kernel: completed and verified on BIOS and UEFI.
 - Phase 2 — Storage and Files: completed and verified on BIOS/UEFI, AHCI, and NVMe test fixtures.
+- Phase 3 — Processes and User Space: completed and verified on BIOS and UEFI with ring-3, preemption, IPC, init, shell, and packaged-app probes.
 
 From Phase 3 onward, each completed phase is moved into the completed section
 and appended to this log after its build and firmware tests pass.
 
-## Phase 3: Processes and User Space
+## Phase 3: Processes and User Space — Completed
 
-- [x] Define a stable syscall ABI and enter user mode through ring 3.
-- [x] Load static ELF executables from the virtual filesystem.
-- [ ] Implement processes, threads, preemptive scheduling, sleep, and termination.
-- [x] Give each process an isolated address space with copy and permission validation.
-- [x] Add pipes, signals or events, shared memory, and basic inter-process communication.
-- [ ] Create an `init` process and move the command shell out of the kernel.
-- [ ] Build a small C standard library and an Axiom user-space SDK/toolchain.
-- [ ] Establish application packages, manifests, versioning, and safe installation rules.
+Phase 3 was completed and verified through the BIOS/UEFI matrix. Axiom now
+loads static ELF64 programs from the VFS, runs them in isolated ring-3 address
+spaces, preempts processes and threads, provides IPC, starts user-space `init`,
+and uses the user-space shell as its primary console. The kernel console remains
+available only as a recovery fallback.
 
 ## Phase 3A: Users, Administrators, and Permissions
 
@@ -162,6 +168,5 @@ and appended to this log after its build and firmware tests pass.
 
 ## Current Next Milestone
 
-Phase 2 is complete. The next milestone is Phase 3: define the syscall ABI,
-enter ring 3, load static ELF programs, and move the shell into an isolated
-user process before account and administrator features are enabled.
+Phase 3 is complete. The next milestone is Phase 3A: persistent users, groups,
+authentication, administrator elevation, least privilege, and audit logging.

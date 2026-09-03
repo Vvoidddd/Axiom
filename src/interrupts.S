@@ -101,6 +101,12 @@ user_kernel_cr3: .quad 0
 .section .text
 .global arch_enter_user
 arch_enter_user:
+    pushq %rbp
+    pushq %rbx
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
     movq %rsp,user_kernel_rsp(%rip)
     movq %cr3,%rax
     movq %rax,user_kernel_cr3(%rip)
@@ -125,6 +131,12 @@ arch_return_from_user:
     movw $0x10,%dx
     movw %dx,%ds
     movw %dx,%es
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %rbx
+    popq %rbp
     ret
 
 .section .rodata

@@ -9,6 +9,7 @@ struct key_event {uint8_t scancode;char character;uint8_t special;bool pressed,s
 void pit_wait_ms(uint32_t milliseconds);
 char keyboard_read_char(void);
 struct key_event keyboard_read_event(void);
+bool keyboard_poll_event(struct key_event *event);
 bool keyboard_set_layout(const char *name);
 const char *keyboard_layout_name(void);
 void hardware_irq_init(void);

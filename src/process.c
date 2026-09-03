@@ -4,17 +4,30 @@
 #include "elf.h"
 #include "vfs.h"
 #include "ipc.h"
+#include "console.h"
+#include "log.h"
 
 struct process_slot {
     struct process_info info;
     bool occupied;
+    bool user_task;
+    uint64_t frame[22];
+    struct user_image image;
 };
 
 static struct process_slot table[PROCESS_MAX];
 static uint32_t current_slot;
 static uint32_t next_pid;
+static uint32_t next_tid;
 static bool user_mode_ok;
+static bool scheduler_active;
+static uint32_t scheduler_preemptions;
+static uint32_t scheduler_marks[2];
+static bool scheduler_ok;
+static uint32_t scheduler_sleeps;
 extern uint64_t arch_enter_user(uint64_t entry,uint64_t stack,uint64_t address_space);
+extern void arch_return_from_user(uint64_t result) __attribute__((noreturn));
+extern void kernel_execute_user_command(char *line);
 
 static const uint8_t user_probe[] = {
     0x48,0x31,0xc0,                         /* xor rax,rax: ABI version */
@@ -33,6 +46,8 @@ static const uint8_t user_probe[] = {
     0xcd,0x80,                              /* int 0x80 */
     0xf4                                    /* hlt if kernel fails to return */
 };
+struct test_elf{uint8_t ident[16];uint16_t type,machine;uint32_t version;uint64_t entry,phoff,shoff;uint32_t flags;uint16_t ehsize,phentsize,phnum,shentsize,shnum,shstrndx;uint32_t ptype,pflags;uint64_t offset,vaddr,paddr,filesz,memsz,align;uint8_t padding[0x1000-120];uint8_t code[64];}__attribute__((packed));
+static bool write_test_elf(const char*path,const uint8_t*code,size_t size){if(size>64)return false;struct test_elf file={.ident={0x7f,'E','L','F',2,1,1},.type=2,.machine=0x3e,.version=1,.entry=0x400000,.phoff=64,.ehsize=64,.phentsize=56,.phnum=1,.ptype=1,.pflags=5,.offset=0x1000,.vaddr=0x400000,.filesz=size,.memsz=size,.align=4096};for(size_t i=0;i<size;i++)file.code[i]=code[i];int fd=vfs_open(path,VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0)return false;bool ok=vfs_write(fd,&file,0x1000+size)==(long)(0x1000+size);return vfs_close(fd)==0&&ok;}
 
 static void copy_name(char *destination, const char *source) {
     size_t i = 0;
@@ -49,7 +64,7 @@ static int create_process(const char *name, uint32_t parent, uint32_t uid,
         if (table[i].occupied) continue;
         table[i].occupied = true;
         table[i].info = (struct process_info){
-            .pid = next_pid++, .parent_pid = parent, .uid = uid, .gid = gid,
+            .pid = next_pid++, .tid = next_tid++, .parent_pid = parent, .uid = uid, .gid = gid,
             .state = PROCESS_READY
         };
         copy_name(table[i].info.name, name);
@@ -58,9 +73,18 @@ static int create_process(const char *name, uint32_t parent, uint32_t uid,
     return -1;
 }
 
+static int create_user_process(const char*name,const struct user_image*image){int slot=create_process(name,1,1000,1000);if(slot<0)return slot;table[slot].user_task=true;table[slot].image=*image;uint64_t*f=table[slot].frame;for(unsigned i=0;i<22;i++)f[i]=0;f[17]=image->entry;f[18]=0x33;f[19]=0x202;f[20]=image->stack_top;f[21]=0x2b;return slot;}
+static int create_user_thread(int owner,const char*name,uint64_t stack_address){if(owner<0||(uint32_t)owner>=PROCESS_MAX||!table[owner].occupied||!table[owner].user_task)return-1;uint64_t physical=pmm_alloc();if(!physical||!vmm_space_map_user(&table[owner].image.space,stack_address-4096,physical,true,false))return-1;int slot=create_process(name,table[owner].info.parent_pid,table[owner].info.uid,table[owner].info.gid);if(slot<0)return slot;table[slot].user_task=true;table[slot].info.pid=table[owner].info.pid;table[slot].image=table[owner].image;table[slot].image.stack_top=stack_address;uint64_t*f=table[slot].frame;for(unsigned i=0;i<22;i++)f[i]=0;f[17]=table[owner].image.entry;f[18]=0x33;f[19]=0x202;f[20]=stack_address;f[21]=0x2b;return slot;}
+static void load_cr3(uint64_t root){__asm__ volatile("mov %0,%%cr3"::"r"(root):"memory");}
+static bool choose_user(uint32_t previous,uint32_t*out){for(uint32_t step=1;step<=PROCESS_MAX;step++){uint32_t candidate=(previous+step)%PROCESS_MAX;if(table[candidate].occupied&&table[candidate].user_task&&table[candidate].info.state==PROCESS_READY){*out=candidate;return true;}}return false;}
+static bool any_live_user(void){for(unsigned i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task&&table[i].info.state!=PROCESS_ZOMBIE)return true;return false;}
+static bool copy_user_string(uint64_t address,char*out,size_t capacity){if(!address||!out||capacity<2||!table[current_slot].user_task)return false;for(size_t i=0;i<capacity;i++){if(!vmm_space_user_range_valid(&table[current_slot].image.space,address+i,1,false))return false;char c=*(const char*)(uintptr_t)(address+i);out[i]=c;if(!c)return true;}out[capacity-1]=0;return false;}
+static void switch_user_frame(uint64_t*frame,bool save_current){uint32_t previous=current_slot;if(save_current)for(unsigned i=0;i<22;i++)table[previous].frame[i]=frame[i];if(table[previous].info.state==PROCESS_RUNNING)table[previous].info.state=PROCESS_READY;uint32_t next;if(!choose_user(previous,&next)){if(!any_live_user())arch_return_from_user(1);return;}current_slot=next;table[next].info.state=PROCESS_RUNNING;for(unsigned i=0;i<22;i++)frame[i]=table[next].frame[i];load_cr3(table[next].image.space.root_physical);}
+
 void process_init(void) {
     for (uint32_t i = 0; i < PROCESS_MAX; i++) table[i].occupied = false;
     next_pid = 1;
+    next_tid = 1;
     int init = create_process("kernel-init", 0, 0, 0);
     int shell = create_process("kernel-shell", 1, 0, 0);
     current_slot = shell >= 0 ? (uint32_t)shell : (uint32_t)init;
@@ -92,6 +116,25 @@ void process_timer_tick(uint64_t now_ms) {
     if (table[current_slot].occupied && table[current_slot].info.state == PROCESS_RUNNING)
         table[current_slot].info.runtime_ticks++;
     if ((now_ms % 10u) == 0) schedule();
+}
+void process_timer_interrupt(uint64_t*frame,uint64_t now_ms){
+    if(!scheduler_active||(frame[18]&3)!=3){process_timer_tick(now_ms);return;}
+    for(uint32_t i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task&&table[i].info.state==PROCESS_SLEEPING&&now_ms>=table[i].info.wake_tick)table[i].info.state=PROCESS_READY;
+    table[current_slot].info.runtime_ticks++;scheduler_preemptions++;switch_user_frame(frame,true);
+}
+bool process_syscall_interrupt(uint64_t*f){
+    if(!scheduler_active||(f[18]&3)!=3)return false;
+    uint64_t number=f[14];
+    for(unsigned i=0;i<22;i++)table[current_slot].frame[i]=f[i];
+    if(number==0xa711){uint64_t id=f[9];if(id>=1&&id<=2)scheduler_marks[id-1]++;f[14]=0;return true;}
+    if(number==SYS_EXIT){table[current_slot].info.exit_status=(int)f[9];table[current_slot].info.state=PROCESS_ZOMBIE;switch_user_frame(f,false);return true;}
+    if(number==SYS_SLEEP){if(f[9]>10000){f[14]=(uint64_t)-22;return true;}table[current_slot].info.wake_tick=hardware_uptime_ms()+f[9];table[current_slot].info.state=PROCESS_SLEEPING;scheduler_sleeps++;switch_user_frame(f,false);return true;}
+    if(number==SYS_YIELD){f[14]=0;switch_user_frame(f,true);return true;}
+    if(number==SYS_WRITE){size_t size=(size_t)f[8];if(size>4096||!vmm_space_user_range_valid(&table[current_slot].image.space,f[9],size,false)){f[14]=(uint64_t)-14;return true;}const char*text=(const char*)(uintptr_t)f[9];for(size_t i=0;i<size;i++)console_putc(text[i]);f[14]=size;return true;}
+    if(number==SYS_KEY_POLL){struct key_event event;f[14]=keyboard_poll_event(&event)&&event.pressed&&event.character?(uint8_t)event.character:0;return true;}
+    if(number==SYS_COMMAND){char line[128];if(!copy_user_string(f[9],line,sizeof(line))){f[14]=(uint64_t)-14;return true;}kernel_execute_user_command(line);f[14]=0;return true;}
+    if(number==SYS_SPAWN){char path[128];if(!copy_user_string(f[9],path,sizeof(path))){f[14]=(uint64_t)-14;return true;}struct user_image image;if(elf_load_vfs(path,&image)){f[14]=(uint64_t)-8;return true;}int child=create_user_process(path,&image);if(child<0){f[14]=(uint64_t)child;return true;}table[child].info.parent_pid=table[current_slot].info.pid;f[14]=table[child].info.pid;log_write("SPAWN",path);return true;}
+    f[14]=(uint64_t)process_syscall(number,f[9],f[8],f[11],f[5]);return true;
 }
 
 long process_syscall(uint64_t number, uint64_t arg0, uint64_t arg1,
@@ -150,12 +193,22 @@ bool process_self_test(void) {
 }
 
 bool process_user_mode_self_test(void){
-    struct test_elf{uint8_t ident[16];uint16_t type,machine;uint32_t version;uint64_t entry,phoff,shoff;uint32_t flags;uint16_t ehsize,phentsize,phnum,shentsize,shnum,shstrndx;uint32_t ptype,pflags;uint64_t offset,vaddr,paddr,filesz,memsz,align;uint8_t padding[0x1000-120];uint8_t code[sizeof(user_probe)];}__attribute__((packed));
-    struct test_elf file={.ident={0x7f,'E','L','F',2,1,1},.type=2,.machine=0x3e,.version=1,.entry=0x400000,.phoff=64,.ehsize=64,.phentsize=56,.phnum=1,.ptype=1,.pflags=5,.offset=0x1000,.vaddr=0x400000,.filesz=sizeof(user_probe),.memsz=sizeof(user_probe),.align=4096};for(size_t i=0;i<sizeof(user_probe);i++)file.code[i]=user_probe[i];
     int directory=vfs_mkdir("/system/bin",0755);if(directory&&directory!=VFS_EEXIST)return false;
-    int fd=vfs_open("/system/bin/ring3-test",VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0||vfs_write(fd,&file,sizeof(file))!=(long)sizeof(file)||vfs_close(fd))return false;
+    if(!write_test_elf("/system/bin/ring3-test",user_probe,sizeof(user_probe)))return false;
     struct user_image image;if(elf_load_vfs("/system/bin/ring3-test",&image)||vmm_user_range_valid(0x400000,1,false))return false;
     user_mode_ok=arch_enter_user(image.entry,image.stack_top,image.space.root_physical)==1&&ipc_self_test();
     return user_mode_ok;
 }
 bool process_user_mode_ready(void){return user_mode_ok;}
+bool process_scheduler_self_test(void){
+    uint8_t code1[]={0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0xf4};
+    uint8_t code2[]={0x48,0xc7,0xc0,4,0,0,0,0x48,0xc7,0xc7,5,0,0,0,0xcd,0x80,0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0xf4};
+    if(!write_test_elf("/system/bin/sched-a",code1,sizeof(code1))||!write_test_elf("/system/bin/sched-b",code2,sizeof(code2)))return false;
+    struct user_image a,b;if(elf_load_vfs("/system/bin/sched-a",&a)||elf_load_vfs("/system/bin/sched-b",&b))return false;
+    int first=create_user_process("sched-a",&a),second=create_user_process("sched-b",&b);if(first<0||second<0)return false;int thread=create_user_thread(first,"sched-a-worker",0x7fffffffd000ull);if(thread<0)return false;
+    uint32_t old=current_slot;scheduler_marks[0]=scheduler_marks[1]=scheduler_preemptions=scheduler_sleeps=0;scheduler_active=true;current_slot=(uint32_t)first;table[first].info.state=PROCESS_RUNNING;
+    uint64_t result=arch_enter_user(a.entry,a.stack_top,a.space.root_physical);scheduler_active=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;
+    scheduler_ok=result==1&&scheduler_preemptions>0&&scheduler_sleeps==1&&scheduler_marks[0]==2&&scheduler_marks[1]==1&&table[first].info.state==PROCESS_ZOMBIE&&table[second].info.state==PROCESS_ZOMBIE&&table[thread].info.state==PROCESS_ZOMBIE&&table[first].info.pid==table[thread].info.pid&&table[first].info.tid!=table[thread].info.tid&&table[first].image.space.root_physical==table[thread].image.space.root_physical&&table[first].info.exit_status==1&&table[second].info.exit_status==2;if(!scheduler_ok){LOG_ERROR("scheduler result/preemptions/sleeps/marks/states");log_hex(result);log_hex(scheduler_preemptions);log_hex(scheduler_sleeps);log_hex(scheduler_marks[0]);log_hex(scheduler_marks[1]);log_hex(table[first].info.state);log_hex(table[second].info.state);log_hex(table[thread].info.state);}return scheduler_ok;
+}
+bool process_launch_init(void){struct user_image image;if(elf_load_vfs("/system/bin/init",&image))return false;int slot=create_user_process("init",&image);if(slot<0)return false;uint32_t old=current_slot;scheduler_active=true;current_slot=(uint32_t)slot;table[slot].info.state=PROCESS_RUNNING;uint64_t result=arch_enter_user(image.entry,image.stack_top,image.space.root_physical);scheduler_active=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;return result==1;}
+bool process_runtime_ready(void){return user_mode_ok&&scheduler_ok;}

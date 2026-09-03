@@ -45,6 +45,7 @@ char keyboard_read_char(void) {
     for(;;){struct key_event event=keyboard_read_event();if(event.pressed&&event.character)return event.character;}
 }
 struct key_event keyboard_read_event(void){for(;;){__asm__ volatile("cli");if(key_read!=key_write){struct key_event e=key_queue[key_read++&127];__asm__ volatile("sti");return e;}__asm__ volatile("sti; hlt");}}
+bool keyboard_poll_event(struct key_event*event){if(!event)return false;bool found=false;__asm__ volatile("cli");if(key_read!=key_write){*event=key_queue[key_read++&127];found=true;}__asm__ volatile("sti");return found;}
 static bool same(const char *a,const char *b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
 bool keyboard_set_layout(const char *name){if(same(name,"us")){layout=0;return true;}if(same(name,"dvorak")){layout=1;return true;}return false;}
 const char *keyboard_layout_name(void){return layout?"dvorak":"us";}

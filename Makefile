@@ -15,7 +15,7 @@ CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -Werror -ffreestanding \
 	-ffunction-sections -fdata-sections -m64 -march=x86-64 -mabi=sysv \
 	-mno-80387 -mno-mmx -mno-sse -mno-sse2 -mno-red-zone -mcmodel=kernel \
 	-mgeneral-regs-only \
-	-Isrc -I$(LIMINE)
+	-Isrc -Isdk/include -I$(LIMINE)
 LDFLAGS := -m elf_x86_64 -nostdlib -static -z max-page-size=0x1000 \
 	-z noexecstack --gc-sections -T linker.ld
 
@@ -23,6 +23,10 @@ SOURCES := $(wildcard src/*.c)
 OBJECTS := $(patsubst src/%.c,$(BUILD)/obj/%.o,$(SOURCES))
 ASM_SOURCES := $(wildcard src/*.S)
 OBJECTS += $(patsubst src/%.S,$(BUILD)/obj/%.S.o,$(ASM_SOURCES))
+USER_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -m64 -mno-red-zone -Isdk/include -Iuser
+USER_LDFLAGS := -m elf_x86_64 -nostdlib -static -z noexecstack -T user/linker.ld
+USER_COMMON := $(BUILD)/user/crt0.o $(BUILD)/user/libaxiom.o
+USER_BINS := $(BUILD)/user/init.elf $(BUILD)/user/shell.elf $(BUILD)/user/hello.elf
 
 .PHONY: all iso run-bios run-uefi test clean distclean
 all: $(KERNEL)
@@ -35,6 +39,25 @@ $(BUILD)/obj/%.o: src/%.c $(LIMINE)/limine.h
 $(BUILD)/obj/%.S.o: src/%.S
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/user/%.o: user/%.c
+	mkdir -p $(@D)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+$(BUILD)/user/%.o: user/%.S
+	mkdir -p $(@D)
+	$(CC) $(USER_CFLAGS) -c $< -o $@
+
+$(BUILD)/user/init.elf: $(USER_COMMON) $(BUILD)/user/init.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/init.o -o $@
+
+$(BUILD)/user/shell.elf: $(USER_COMMON) $(BUILD)/user/shell.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/shell.o -o $@
+
+$(BUILD)/user/hello.elf: $(USER_COMMON) $(BUILD)/user/hello.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/hello.o -o $@
+
+$(BUILD)/obj/user_bins.S.o: $(USER_BINS)
 
 -include $(OBJECTS:.o=.d)
 
@@ -77,7 +100,7 @@ test: $(ISO)
 	./tests/smoke.sh $(ISO)
 
 clean:
-	rm -rf $(BUILD)/obj $(KERNEL) $(ISO) $(ISO_ROOT)
+	rm -rf $(BUILD)/obj $(BUILD)/user $(KERNEL) $(ISO) $(ISO_ROOT)
 
 distclean:
 	rm -rf $(BUILD)

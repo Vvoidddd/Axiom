@@ -4,8 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-
-#define AXIOM_SYSCALL_ABI_VERSION 1u
+#include <axiom/syscall.h>
 #define PROCESS_MAX 32u
 
 enum process_state {
@@ -17,18 +16,9 @@ enum process_state {
     PROCESS_ZOMBIE
 };
 
-enum axiom_syscall {
-    SYS_ABI_VERSION,
-    SYS_GETPID,
-    SYS_GETUID,
-    SYS_YIELD,
-    SYS_SLEEP,
-    SYS_EXIT,
-    SYS_COUNT
-};
-
 struct process_info {
     uint32_t pid;
+    uint32_t tid;
     uint32_t parent_pid;
     uint32_t uid;
     uint32_t gid;
@@ -41,6 +31,8 @@ struct process_info {
 
 void process_init(void);
 void process_timer_tick(uint64_t now_ms);
+void process_timer_interrupt(uint64_t *frame,uint64_t now_ms);
+bool process_syscall_interrupt(uint64_t *frame);
 long process_syscall(uint64_t number, uint64_t arg0, uint64_t arg1,
                      uint64_t arg2, uint64_t arg3);
 uint32_t process_count(void);
@@ -49,5 +41,8 @@ const char *process_state_name(enum process_state state);
 bool process_self_test(void);
 bool process_user_mode_self_test(void);
 bool process_user_mode_ready(void);
+bool process_scheduler_self_test(void);
+bool process_launch_init(void);
+bool process_runtime_ready(void);
 
 #endif

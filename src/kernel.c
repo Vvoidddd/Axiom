@@ -17,6 +17,7 @@
 #include "filesystems.h"
 #include "initramfs.h"
 #include "process.h"
+#include "package.h"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(6);
@@ -76,7 +77,7 @@ static void cmd_about(const char *args) {
 
 static void cmd_version(const char *args) {
     (void)args;
-    console_write("AXIOM KERNEL VERSION 0.4.0\nBOOT PROTOCOL: LIMINE\nARCHITECTURE: X86-64\n");
+    console_write("AXIOM KERNEL VERSION 0.5.0\nBOOT PROTOCOL: LIMINE\nARCHITECTURE: X86-64\n");
 }
 
 static void cmd_clear(const char *args) { (void)args; console_clear(); }
@@ -246,12 +247,13 @@ static void cmd_fsck(const char*a){bool repair=streq(a,"-r")||streq(a,"--repair"
 static void cmd_mkfs(const char*a){if(!streq(a,"ram0")){console_write("REFUSING: MKFS REQUIRES EXPLICIT RAM0 TEST DEVICE.\n");return;}struct block_device*d=block_device_at(0);console_write(axiomfs_format(d,0,d->sectors)?"FORMAT FAILED\n":"AXIOMFS V2 FORMAT COMPLETE\n");}
 static void cmd_storagetest(const char*a){(void)a;bool ok=storage_self_test();struct block_device*d=block_device_at(0);ok=ok&&axiomfs_self_test(d);ok=ok&&!axiomfs_simulate_interrupted_write(d,0);ok=ok&&axiomfs_check(d,0,false)==-2;ok=ok&&!axiomfs_check(d,0,true);ok=ok&&fat32_self_test(d);ok=ok&&vfs_self_test();ok=ok&&vfs_open("/does/not/exist",VFS_READ)==VFS_ENOENT;console_write(ok?"PHASE 2 STORAGE RECOVERY TESTS: PASS\n":"PHASE 2 STORAGE RECOVERY TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 2 STORAGE RECOVERY TESTS");}
 static void cmd_hwstoragetest(const char*a){(void)a;uint32_t tested=0;bool ok=storage_hardware_self_test(&tested);console_write(ok?"HARDWARE STORAGE READ TEST: PASS, DEVICES=":"HARDWARE STORAGE READ TEST: FAIL, DEVICES=");console_write_u64(tested);console_putc('\n');log_write(ok?"PASS":"FAIL","HARDWARE STORAGE DEVICE ATTACHED AND READ ONLY");}
-static void cmd_ps(const char*a){(void)a;console_write("PID PPID UID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
-static void cmd_proctest(const char*a){(void)a;bool ok=process_self_test()&&process_user_mode_ready();console_write(ok?"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: PASS\n":"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 RING3 PROCESS AND SYSCALL TESTS");}
+static void cmd_ps(const char*a){(void)a;console_write("PID TID PPID UID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.tid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
+static void cmd_packages(const char*a){(void)a;console_write("NAME VERSION ABI EXECUTABLE\n");for(uint32_t i=0;i<package_count();i++){const struct package_info*p=package_at(i);console_write(p->name);console_putc(' ');console_write(p->version);console_putc(' ');console_write_u64(p->abi);console_putc(' ');console_write(p->executable);console_putc('\n');}}
+static void cmd_proctest(const char*a){(void)a;bool ok=process_runtime_ready();console_write(ok?"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: PASS\n":"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 RING3 PROCESS AND SYSCALL TESTS");}
 static void cmd_rescan(const char*a){(void)a;pci_init();storage_probe_hardware();console_write("PCI AND STORAGE RESCAN COMPLETE.\n");}
 static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}if(keyboard_set_layout(args))console_write("KEYBOARD LAYOUT CHANGED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
 static void cmd_run(const char *args){char script[128];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
-static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;ps;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
+static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;ps;packages;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
 
 static void cmd_reboot(const char *args) { (void)args; LOG_INFO("reboot requested"); console_write("REBOOTING...\n"); machine_reboot(); }
 static void cmd_halt(const char *args) { (void)args; console_write("SYSTEM HALTED.\n"); machine_halt(); }
@@ -266,7 +268,7 @@ static const struct command commands[] = {
     {"logs",cmd_logs},{"irqs",cmd_irqs},{"smp",cmd_smp},{"shutdown",cmd_shutdown},
     {"pci",cmd_pci},{"disks",cmd_disks},{"layout",cmd_layout},{"run",cmd_run},{"script",cmd_script},
     {"ls",cmd_ls},{"cd",cmd_cd},{"pwd",cmd_pwd},{"cat",cmd_cat},{"touch",cmd_touch},{"mkdir",cmd_mkdir},{"cp",cmd_cp},{"mv",cmd_mv},{"rm",cmd_rm},{"ln",cmd_ln},{"chmod",cmd_chmod},{"chown",cmd_chown},{"mount",cmd_mount},{"unmount",cmd_unmount},{"df",cmd_df},{"du",cmd_du},{"fsck",cmd_fsck},{"mkfs",cmd_mkfs},{"fatls",cmd_fatls},{"fatcat",cmd_fatcat},{"storagetest",cmd_storagetest},{"hwstoragetest",cmd_hwstoragetest},{"rescan",cmd_rescan},{"partitions",cmd_partitions},
-    {"ps",cmd_ps},{"proctest",cmd_proctest},
+    {"ps",cmd_ps},{"proctest",cmd_proctest},{"packages",cmd_packages},
     {"memmap",cmd_memmap},{"fbinfo",cmd_fbinfo},{"reboot",cmd_reboot},{"halt",cmd_halt}
 };
 
@@ -282,6 +284,7 @@ static void execute(char *line) {
         if (streq(line, commands[i].name)) { commands[i].handler(args); return; }
     console_write("UNKNOWN COMMAND: "); console_write(line); console_write(". TRY HELP.\n");
 }
+void kernel_execute_user_command(char *line){execute(line);}
 
 static void shell(void) {
     static char history[16][128];static size_t history_count;
@@ -377,7 +380,7 @@ static void loading_screen(void) {
     load_begin(9);passed=storage_init();load_finish(9,passed);failed|=!passed;
     load_begin(10);vfs_init();passed=vfs_stat_path("/system",&(struct vfs_stat){0})==0;load_finish(10,passed);failed|=!passed;
     load_begin(11);passed=initramfs_load();load_finish(11,passed);failed|=!passed;
-    load_begin(12);process_init();passed=process_self_test();load_finish(12,passed);failed|=!passed;
+    load_begin(12);process_init();package_init();passed=process_self_test()&&package_self_test();load_finish(12,passed);failed|=!passed;
     load_begin(13);load_finish(13,true);
     fb_text(120,580,failed?"[ FAILED ] SYSTEM IS NOT SAFE TO BOOT":"[ OK ] ALL REQUIRED TESTS PASSED",failed?LOAD_RED:LOAD_GREEN,2);
     pit_wait_ms(failed?3000:900);
@@ -396,8 +399,13 @@ void kmain(void) {
     arch_init(hhdm_request.response?hhdm_request.response->offset:0);
     if(!process_user_mode_self_test())panic("ring 3 syscall probe failed",0,0,0);
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
+    if(!process_scheduler_self_test())panic("preemptive user scheduler probe failed",0,0,0);
+    LOG_INFO("preemptive ring 3 scheduler probe passed");
     storage_probe_hardware();
     smp_start(mp_request.response);
-    console_write("AXIOM V0.4\nYOUR SYSTEM. YOUR RULES.\nTYPE HELP FOR COMMANDS.\n\n");
+    LOG_INFO("launching user-space init and shell");
+    if(!process_launch_init())LOG_ERROR("user-space init failed or exited abnormally");
+    LOG_WARN("user shell exited; entering kernel recovery console");
+    console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");
     shell();
 }
