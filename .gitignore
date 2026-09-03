@@ -4,3 +4,4 @@
 *.log
 *.sha256
 .vscode/
+/.tools/
