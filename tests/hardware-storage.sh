@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 iso=${1:-build/axiom.iso};qemu=${QEMU:-qemu-system-x86_64}
-ovmf="";for f in /usr/share/edk2/x64/OVMF_CODE.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/ovmf/x64/OVMF_CODE.fd;do [[ -f $f ]]&&{ ovmf=$f;break;};done
+ovmf=${OVMF:-};for f in /usr/share/edk2/x64/OVMF_CODE.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/ovmf/x64/OVMF_CODE.fd;do [[ -f $f ]]&&{ ovmf=$f;break;};done
 command -v "$qemu" >/dev/null;command -v qemu-img >/dev/null;[[ -n $ovmf ]]
 tmp=$(mktemp -d);trap 'rm -rf "$tmp"' EXIT
 qemu-img create -q -f raw "$tmp/sata.img" 32M;qemu-img create -q -f raw "$tmp/nvme.img" 32M

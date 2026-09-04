@@ -197,7 +197,7 @@ static void cmd_allocstat(const char *args){
     console_write(" USED PAGES: ");console_write_u64(pmm_used_pages());console_putc('\n');
     console_write("HEAP PAYLOAD BYTES: ");console_write_u64(heap_bytes_used());console_putc('\n');
 }
-static void cmd_heaptest(const char *args){(void)args;uint64_t before=pmm_free_pages();void *a=kmalloc(64),*b=kmalloc(7000);if(!a||!b){console_write("HEAP ALLOCATION FAILED.\n");return;}((volatile uint8_t *)a)[0]=0x5a;((volatile uint8_t *)b)[6999]=0xa5;kfree(a);kfree(b);if(pmm_free_pages()==before&&heap_bytes_used()==0)console_write("HEAP MAP ALLOCATE FREE TEST: PASS\n");else console_write("HEAP MAP ALLOCATE FREE TEST: FAIL\n");}
+static void cmd_heaptest(const char *args){(void)args;uint64_t pages_before=pmm_free_pages(),bytes_before=heap_bytes_used();void *a=kmalloc(64),*b=kmalloc(7000);if(!a||!b){console_write("HEAP ALLOCATION FAILED.\n");LOG_ERROR("HEAP MAP ALLOCATE FREE TEST");return;}((volatile uint8_t *)a)[0]=0x5a;((volatile uint8_t *)b)[6999]=0xa5;kfree(a);kfree(b);bool ok=pmm_free_pages()==pages_before&&heap_bytes_used()==bytes_before;console_write(ok?"HEAP MAP ALLOCATE FREE TEST: PASS\n":"HEAP MAP ALLOCATE FREE TEST: FAIL\n");log_write(ok?"PASS":"FAIL","HEAP MAP ALLOCATE FREE TEST");}
 static void cmd_fault(const char *args){(void)args;LOG_WARN("deliberate invalid opcode test");__asm__ volatile("ud2");}
 
 static void cmd_cputest(const char *args) {
@@ -334,14 +334,16 @@ static const char *load_items[] = {
     "CPU identification", "ACPI firmware tables", "Processor topology",
     "Memory manager diagnostics", "PIT timer", "PS2 keyboard controller",
     "Block storage and partitions", "Virtual filesystem", "Embedded initramfs",
-    "Process and syscall manager", "Command console"
+    "Process and syscall manager", "Command console",
+    "Interrupt and privilege gates", "Ring 3 syscall runtime",
+    "Preemptive process scheduler"
 };
 #define LOAD_ITEM_COUNT (sizeof(load_items)/sizeof(load_items[0]))
 #define LOAD_RED 0xff5f6d
 #define LOAD_YELLOW 0xffcc55
 #define LOAD_GREEN 0x63d391
 
-static uint64_t load_y(unsigned step){return 145u+(uint64_t)step*28u;}
+static uint64_t load_y(unsigned step){return 125u+(uint64_t)step*23u;}
 static void load_status(unsigned step,const char *status,uint32_t colour){
     uint64_t x=fb_width()-330u,y=load_y(step);
     fb_rect(x,y,230,18,0x101318);
@@ -382,6 +384,16 @@ static void loading_screen(void) {
     load_begin(11);passed=initramfs_load();load_finish(11,passed);failed|=!passed;
     load_begin(12);process_init();package_init();passed=process_self_test()&&package_self_test();load_finish(12,passed);failed|=!passed;
     load_begin(13);load_finish(13,true);
+    load_begin(14);
+    arch_use_guarded_ist(vmm_guarded_stack(8));
+    arch_use_guarded_ring0(vmm_guarded_stack(16));
+    arch_init(hhdm_request.response?hhdm_request.response->offset:0);
+    passed=arch_interrupt_count(32)>0;
+    if(!passed)pit_wait_ms(25);
+    passed=arch_interrupt_count(32)>0;
+    load_finish(14,passed);failed|=!passed;
+    load_begin(15);passed=process_user_mode_self_test();load_finish(15,passed);failed|=!passed;
+    load_begin(16);passed=passed&&process_scheduler_self_test();load_finish(16,passed);failed|=!passed;
     fb_text(120,580,failed?"[ FAILED ] SYSTEM IS NOT SAFE TO BOOT":"[ OK ] ALL REQUIRED TESTS PASSED",failed?LOAD_RED:LOAD_GREEN,2);
     pit_wait_ms(failed?3000:900);
     if(failed)machine_halt();
@@ -391,15 +403,12 @@ void kmain(void) {
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision) || !framebuffer_request.response ||
         framebuffer_request.response->framebuffer_count == 0 ||
         !fb_init(framebuffer_request.response->framebuffers[0])) machine_halt();
+    console_prepare();
+    log_init();
     splash();
     loading_screen();
     console_init();
-    log_init();
-    arch_use_guarded_ist(vmm_guarded_stack(4));
-    arch_init(hhdm_request.response?hhdm_request.response->offset:0);
-    if(!process_user_mode_self_test())panic("ring 3 syscall probe failed",0,0,0);
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
-    if(!process_scheduler_self_test())panic("preemptive user scheduler probe failed",0,0,0);
     LOG_INFO("preemptive ring 3 scheduler probe passed");
     storage_probe_hardware();
     smp_start(mp_request.response);

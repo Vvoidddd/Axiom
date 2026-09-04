@@ -25,9 +25,15 @@ static void scroll(void) {
 }
 
 void console_init(void) {
+    console_prepare();
+    console_clear();
+}
+
+void console_prepare(void) {
     cols = fb_width() / CELL_W;
     rows = fb_height() / CELL_H;
-    console_clear();
+    if(!cols)cols=1;
+    if(!rows)rows=1;
 }
 
 void console_clear(void) { fb_clear(BG); col = 0; row = 0; }

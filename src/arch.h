@@ -8,5 +8,6 @@ uint64_t arch_interrupt_count(uint8_t vector);
 bool arch_apic_active(void);
 bool arch_ioapic_present(void);
 void arch_use_guarded_ist(void *stack_top);
+void arch_use_guarded_ring0(void *stack_top);
 uint64_t arch_enter_user(uint64_t entry,uint64_t stack,uint64_t address_space);
 #endif

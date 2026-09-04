@@ -19,7 +19,13 @@ isr_common:
     pushq %r14
     pushq %r15
     movq %rsp, %rdi
+    /* Hardware can enter with either stack alignment depending on the
+       interrupted instruction. Preserve the frame address in callee-saved
+       RBX and satisfy the SysV ABI before calling C. */
+    movq %rsp, %rbx
+    andq $-16, %rsp
     call arch_interrupt_dispatch
+    movq %rbx, %rsp
     popq %r15
     popq %r14
     popq %r13

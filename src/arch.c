@@ -37,7 +37,7 @@ static void gdt_init(void) {
     gdt[1]=0x00af9a000000ffffull; /* 0x08: kernel 64-bit code */
     gdt[2]=0x00cf92000000ffffull; /* 0x10: kernel data/stack */
     if(!tss.ist[0]) tss.ist[0]=(uint64_t)(uintptr_t)(ist_stack+sizeof(ist_stack));
-    tss.rsp[0]=(uint64_t)(uintptr_t)(ring0_stack+sizeof(ring0_stack));
+    if(!tss.rsp[0]) tss.rsp[0]=(uint64_t)(uintptr_t)(ring0_stack+sizeof(ring0_stack));
     tss.iomap=sizeof(tss);
     uint64_t base=(uint64_t)(uintptr_t)&tss, limit=sizeof(tss)-1;
     gdt[3]=(limit&0xffff)|((base&0xffffff)<<16)|(0x89ull<<40)|(((limit>>16)&15)<<48)|(((base>>24)&255)<<56);
@@ -87,3 +87,4 @@ uint64_t arch_interrupt_count(uint8_t vector){ return counts[vector]; }
 bool arch_apic_active(void){return lapic_enabled;}
 bool arch_ioapic_present(void){return ioapic!=0;}
 void arch_use_guarded_ist(void *stack_top){if(stack_top)tss.ist[0]=(uint64_t)(uintptr_t)stack_top;}
+void arch_use_guarded_ring0(void *stack_top){if(stack_top)tss.rsp[0]=(uint64_t)(uintptr_t)stack_top;}
