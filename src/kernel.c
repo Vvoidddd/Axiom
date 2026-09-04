@@ -417,6 +417,7 @@ static void loading_screen(void) {
 static void setup_field(uint64_t y,const char*label,char*out,size_t capacity,bool secret){size_t length=0;out[0]=0;fb_text(250,y,label,0xc8d1dc,2);fb_rect(250,y+28,524,42,0x252b34);fb_rect(254,y+32,516,34,0x161b22);for(;;){struct key_event event=keyboard_read_event();if(!event.pressed)continue;char c=event.character;if(c=='\n'){if(length)break;continue;}if(c=='\b'){if(length)length--;}else if(c>=32&&c<127&&length+1<capacity)out[length++]=c;out[length]=0;fb_rect(254,y+32,516,34,0x161b22);char shown[73];for(size_t i=0;i<length;i++)shown[i]=secret?'*':out[i];shown[length]=0;fb_text(265,y+39,shown,0xf4f7fa,2);}}
 static bool same_text(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
 static void first_boot_setup(void){if(account_has_admin())return;char name[32],password[73],confirm[73];for(;;){fb_clear(0x101318);fb_text(250,70,"WELCOME TO AXIOM",0xf4f7fa,4);fb_text(250,115,"Create the first administrator account",0x8995a3,2);setup_field(165,"USERNAME",name,sizeof(name),false);LOG_INFO("setup username accepted");setup_field(265,"PASSWORD (8-72 CHARACTERS)",password,sizeof(password),true);LOG_INFO("setup password accepted");setup_field(365,"CONFIRM PASSWORD",confirm,sizeof(confirm),true);LOG_INFO("setup confirmation accepted");if(!same_text(password,confirm)){LOG_WARN("setup password confirmation mismatch");fb_text(250,475,"PASSWORDS DO NOT MATCH - TRY AGAIN",LOAD_RED,2);pit_wait_ms(1200);continue;}uint32_t uid;if(account_create(name,password,ACCOUNT_ADMIN,&uid)||!account_save()||!account_begin_session(uid)){LOG_ERROR("setup account creation failed");fb_text(250,475,"ACCOUNT COULD NOT BE CREATED - TRY AGAIN",LOAD_RED,2);pit_wait_ms(1200);continue;}fb_text(250,475,"[ OK ] ADMINISTRATOR CREATED",LOAD_GREEN,2);LOG_INFO("first administrator account created");pit_wait_ms(900);return;}}
+static void graphical_login(void){char name[32],password[73];account_end_session();for(;;){fb_clear(0x101318);fb_text(250,90,"AXIOM LOGIN",0xf4f7fa,5);fb_text(250,145,"Your system. Your rules.",0x8995a3,2);setup_field(210,"USERNAME",name,sizeof(name),false);setup_field(315,"PASSWORD",password,sizeof(password),true);int uid=account_authenticate(name,password,hardware_uptime_ms());for(size_t i=0;i<sizeof(password);i++)password[i]=0;if(uid>=0&&account_begin_session((uint32_t)uid)){fb_text(250,430,"[ OK ] SIGNED IN",LOAD_GREEN,2);LOG_INFO("graphical login successful");pit_wait_ms(700);return;}fb_text(250,430,"LOGIN FAILED - CHECK CREDENTIALS",LOAD_RED,2);LOG_WARN("graphical login rejected");pit_wait_ms(1000);}}
 
 void kmain(void) {
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision) || !framebuffer_request.response ||
@@ -427,6 +428,7 @@ void kmain(void) {
     splash();
     loading_screen();
     first_boot_setup();
+    graphical_login();
     console_init();
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
     LOG_INFO("preemptive ring 3 scheduler probe passed");
