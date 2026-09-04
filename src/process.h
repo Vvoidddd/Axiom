@@ -26,6 +26,8 @@ struct process_info {
     uint32_t real_gid;
     uint32_t effective_gid;
     uint32_t saved_gid;
+    uint64_t capabilities;
+    uint64_t capability_expiry_ms;
     enum process_state state;
     uint64_t runtime_ticks;
     uint64_t wake_tick;
@@ -49,5 +51,8 @@ bool process_scheduler_self_test(void);
 /* Runs one authenticated user session and returns its shell exit status. */
 int process_launch_init(void);
 bool process_runtime_ready(void);
+bool process_grant_current_capability(uint64_t capability,uint64_t expiry_ms);
+bool process_current_has_capability(uint64_t capability,uint64_t now_ms);
+bool process_current_identity(uint32_t *real_uid,uint32_t *effective_uid,uint32_t *effective_gid);
 
 #endif

@@ -127,6 +127,9 @@ doing that safely requires the future physical memory manager.
 - `src/storage.c`, `src/ahci.c`, and `src/nvme.c` discover storage and implement read-only hardware I/O.
 - `src/vfs.c` provides the file, directory, descriptor, path, and mount API.
 - `src/process.c` provides the Phase 3 syscall/process/scheduler foundation.
+- `src/account.c` and `src/security.h` provide accounts, groups, capabilities,
+  recovery-key authentication, and protected audit records. See
+  [docs/security.md](docs/security.md) for the threat model.
 - `src/elf.c` validates and maps static x86-64 ELF programs from the VFS.
 - `src/ipc.c` provides bounded pipes, process events, and shared memory.
 - `src/package.c` validates ABI-compatible package manifests.
@@ -167,6 +170,14 @@ make iso
 The suite requires `qemu-system-x86_64` and OVMF. The `fault` command used by
 the suite deliberately invokes an invalid opcode and should only be used when
 testing panic diagnostics.
+
+Authenticated session and privilege-boundary tests are separate so their
+screenshots and audit traces remain easy to inspect:
+
+```sh
+./tests/session.sh axiom.iso build/session
+./tests/security.sh axiom.iso build/security
+```
 
 Real emulated AHCI/NVMe devices are checked separately:
 

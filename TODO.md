@@ -57,6 +57,27 @@ tests on both BIOS and UEFI.
 - [x] Start a compiled user-space `init` and make its ring-3 shell the primary console.
 - [x] Add a freestanding user runtime, shared syscall headers, linker layout, and SDK build template.
 - [x] Add validated versioned system/application manifests and a packaged ring-3 sample app.
+- [x] Assign stable account UID/GID values and reserve identity 0 for recovery administration.
+- [x] Support standard, administrator, service, disabled, and recovery account states.
+- [x] Store only salted, bounded memory-hard password verifiers with login throttling.
+- [x] Add `useradd`, `userdel`, `usermod`, `passwd`, `groups`, `id`, and `whoami` account APIs and commands.
+- [x] Require graphical first-boot creation of the initial administrator account.
+- [x] Build graphical login, logout, lock-screen, password-change, and failed-login throttling flows.
+- [x] Implement validated users/groups databases with atomic replacement, backups, and corrupt-primary recovery.
+- [x] Give processes inherited real, effective, and saved user/group identities.
+- [x] Enforce file, directory-traversal, execute, and device-access permissions in the kernel.
+- [x] Add ownership, per-user creation masks, sticky directories, and set-user-ID/set-group-ID semantics.
+- [x] Isolate user homes, credential data, process listings, and private settings.
+- [x] Create an `admin` group whose membership permits requests but never silently elevates programs.
+- [x] Add authenticated, allowlisted, narrowly scoped `elevate` capabilities with 60-second expiry.
+- [x] Require explicit confirmation for destructive administrator actions and revoke stale capabilities.
+- [x] Separate mount, time, user, network, power, audit, device, ownership, service, and package capabilities.
+- [x] Create non-interactive least-privilege identities and private homes for system services.
+- [x] Add per-user homes, environment variables, paths, locale/timezone preferences, umasks, and startup tasks.
+- [x] Add a protected security audit log with credential-bearing serial-command redaction.
+- [x] Add a random per-install recovery key, one-time display, verifier-only storage, and rotation.
+- [x] Test escalation denial, malformed database fallback, disabled users, admin revocation, expiry, and concurrent logins.
+- [x] Document the administrator threat model and all kernel/system/admin/service/user privilege boundaries.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 
@@ -69,15 +90,6 @@ Phase 2 was completed and verified with the BIOS/UEFI recovery matrix plus
 emulated AHCI and NVMe hardware tests. Its completed deliverables are recorded
 above; physical disks remain read-only while AxiomFS writes stay on test media.
 
-### Phase completion log
-
-- Phase 1 — Stable Terminal Kernel: completed and verified on BIOS and UEFI.
-- Phase 2 — Storage and Files: completed and verified on BIOS/UEFI, AHCI, and NVMe test fixtures.
-- Phase 3 — Processes and User Space: completed and verified on BIOS and UEFI with ring-3, preemption, IPC, init, shell, and packaged-app probes.
-
-From Phase 3 onward, each completed phase is moved into the completed section
-and appended to this log after its build and firmware tests pass.
-
 ## Phase 3: Processes and User Space — Completed
 
 Phase 3 was completed and verified through the BIOS/UEFI matrix. Axiom now
@@ -86,29 +98,26 @@ spaces, preempts processes and threads, provides IPC, starts user-space `init`,
 and uses the user-space shell as its primary console. The kernel console remains
 available only as a recovery fallback.
 
-## Phase 3A: Users, Administrators, and Permissions
+## Phase 3A: Users, Administrators, and Permissions — Completed
 
-- [ ] Assign every account a stable user ID and primary group ID; reserve ID 0 for the built-in system administrator.
-- [ ] Support standard users, administrator users, service accounts, disabled accounts, and a recovery administrator.
-- [ ] Create an installer or first-boot setup that requires creation of the initial administrator account.
-- [ ] Store password verifiers with a modern salted, memory-hard password hash; never store plaintext passwords.
-- [ ] Build login, logout, lock-screen, password-change, and failed-login throttling flows.
-- [ ] Add local account commands and APIs: `useradd`, `userdel`, `usermod`, `passwd`, `groups`, `id`, and `whoami`.
-- [ ] Implement users and groups databases with atomic updates, validation, backups, and recovery behavior.
-- [ ] Give processes real, effective, and saved user/group identities inherited safely across process creation.
-- [ ] Enforce owner/group/other read, write, execute, directory-traversal, and device-access permissions in the kernel.
-- [ ] Add file ownership, a configurable creation mask, sticky directories, set-user-ID, and set-group-ID semantics.
-- [ ] Prevent ordinary users from reading another user's home directory, credentials, processes, or private settings.
-- [ ] Create an `admin` group for accounts allowed to request elevated privileges; membership alone must not silently elevate programs.
-- [ ] Add an `elevate` command similar to `sudo` that requires authentication, uses an allowlist policy, and grants narrowly scoped temporary privileges.
-- [ ] Require explicit confirmation for destructive administrator operations and expire cached elevation credentials quickly.
-- [ ] Prefer capabilities for individual powers such as mounting disks, changing time, managing users, networking, and shutting down.
-- [ ] Run system services under dedicated least-privilege service accounts rather than the administrator identity.
-- [ ] Add per-user environment variables, executable search paths, preferences, startup tasks, and session storage.
-- [ ] Record security-relevant events in a protected audit log: logins, failed logins, account changes, elevation, permission failures, and shutdowns.
-- [ ] Add account recovery using offline recovery media or a recovery key without creating a universal backdoor.
-- [ ] Test privilege escalation attempts, malformed account databases, revoked admins, locked accounts, and concurrent logins.
-- [ ] Document the administrator threat model and clearly distinguish kernel, system, administrator, service, and standard-user privileges.
+Phase 3A was completed and verified on BIOS and UEFI. Axiom now has graphical
+account setup/login, repeatable lock/logout sessions, inherited process
+credentials, protected homes, kernel-enforced Unix-style permissions, groups,
+short-lived capability elevation, service identities, audit records, and a
+unique recovery key. Negative QEMU tests cover ordinary-user escalation,
+cross-home access, missing confirmation, disabled accounts, capability expiry,
+live administrator revocation, corrupt account data, and simultaneous login
+verification across four processors.
+
+## Phase completion log
+
+- Phase 1 — Stable Terminal Kernel: completed and verified on BIOS and UEFI.
+- Phase 2 — Storage and Files: completed on BIOS/UEFI plus AHCI and NVMe fixtures.
+- Phase 3 — Processes and User Space: completed on BIOS/UEFI with ring-3, preemption, IPC, init, shell, and packaged-app probes.
+- Phase 3A — Users, Administrators, and Permissions: completed on BIOS/UEFI with session, privilege, recovery, isolation, revocation, and concurrent-login probes.
+
+Future phases must be appended here only after a clean build and their BIOS/UEFI
+runtime, serial-log, and framebuffer-screenshot checks pass.
 
 ## Phase 3B: Core System Services
 

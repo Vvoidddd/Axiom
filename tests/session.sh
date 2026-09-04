@@ -10,7 +10,7 @@ keys() {
     local text=$1 char
     for ((i=0; i<${#text}; i++)); do
         char=${text:i:1}
-        [[ $char == " " ]] && char=spc
+        case $char in ' ') char=spc;; '-') char=minus;; '/') char=slash;; esac
         printf 'sendkey %s\n' "$char"
         sleep .04
     done
@@ -31,7 +31,8 @@ run_session_case() {
         sleep "$wait_time"
         keys axiomadmin; sleep 1
         keys axiomtest123; sleep 1
-        keys axiomtest123; sleep 2
+        keys axiomtest123; sleep 1
+        keys ''; sleep 1
         keys axiomadmin; sleep 1
         keys axiomtest123; sleep 3
         keys id; sleep 1

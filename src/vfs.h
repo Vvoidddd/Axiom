@@ -9,7 +9,9 @@ enum vfs_error{VFS_OK=0,VFS_ENOENT=-2,VFS_EIO=-5,VFS_EBADF=-9,VFS_EACCES=-13,VFS
 #define VFS_CREATE 4u
 #define VFS_TRUNCATE 8u
 #define VFS_DIRECTORY 16u
+#define VFS_EXECUTE 32u
 struct vfs_stat{uint64_t size,allocated,created,modified;uint32_t uid,gid,mode,links;bool directory,symlink,sparse;};
+struct vfs_security_context{uint32_t uid,gid,groups[8],group_count,creation_mask;uint64_t capabilities;};
 typedef void(*vfs_list_fn)(const char*,const struct vfs_stat*,void*);
 void vfs_init(void);
 int vfs_open(const char *path,uint32_t flags);
@@ -26,6 +28,14 @@ int vfs_list(const char *path,vfs_list_fn callback,void *context);
 int vfs_chmod(const char *path,uint32_t mode);
 int vfs_chown(const char *path,uint32_t uid,uint32_t gid);
 void vfs_set_credentials(uint32_t uid,uint32_t gid);
+void vfs_set_security_context(uint32_t uid,uint32_t gid,const uint32_t *groups,
+                              uint32_t group_count,uint32_t creation_mask,
+                              uint64_t capabilities);
+void vfs_get_security_context(uint32_t *uid,uint32_t *gid,uint32_t *creation_mask,
+                              uint64_t *capabilities);
+void vfs_capture_security_context(struct vfs_security_context *context);
+void vfs_restore_security_context(const struct vfs_security_context *context);
+bool vfs_can_access(const char *path,uint32_t access);
 int vfs_lock(const char *path,bool locked);
 int vfs_set_quota(uint32_t uid,uint64_t bytes);
 uint64_t vfs_user_usage(uint32_t uid);
@@ -38,4 +48,5 @@ uint64_t vfs_capacity_bytes(void);
 int vfs_check(bool repair);
 const char *vfs_error_string(int error);
 bool vfs_self_test(void);
+uint32_t vfs_self_test_failure(void);
 #endif
