@@ -67,6 +67,7 @@ static void cmd_help(const char *args) {
     console_write("FILES: LS CD PWD CAT TOUCH MKDIR CP MV RM LN CHMOD CHOWN\n");
     console_write("STORAGE: DISKS PARTITIONS MOUNT UNMOUNT DF DU FSCK\n");
     console_write("PROCESSES: PS PROCTEST\n");
+    console_write("USERS: ACCOUNTS USERADD USERDEL USERMOD PASSWD LOGIN LOGOUT ID WHOAMI GROUPS\n");
     console_write("POWER: REBOOT SHUTDOWN HALT\n");
 }
 
@@ -250,11 +251,22 @@ static void cmd_storagetest(const char*a){(void)a;bool ok=storage_self_test();st
 static void cmd_hwstoragetest(const char*a){(void)a;uint32_t tested=0;bool ok=storage_hardware_self_test(&tested);console_write(ok?"HARDWARE STORAGE READ TEST: PASS, DEVICES=":"HARDWARE STORAGE READ TEST: FAIL, DEVICES=");console_write_u64(tested);console_putc('\n');log_write(ok?"PASS":"FAIL","HARDWARE STORAGE DEVICE ATTACHED AND READ ONLY");}
 static void cmd_ps(const char*a){(void)a;console_write("PID TID PPID UID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.tid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
 static void cmd_packages(const char*a){(void)a;console_write("NAME VERSION ABI EXECUTABLE\n");for(uint32_t i=0;i<package_count();i++){const struct package_info*p=package_at(i);console_write(p->name);console_putc(' ');console_write(p->version);console_putc(' ');console_write_u64(p->abi);console_putc(' ');console_write(p->executable);console_putc('\n');}}
+static void cmd_accounts(const char*a){(void)a;console_write("UID GID TYPE STATE NAME\n");for(uint32_t i=0;i<account_count();i++){const struct account_info*u=account_at(i);console_write_u64(u->uid);console_putc(' ');console_write_u64(u->gid);console_putc(' ');console_write(account_type_name(u->type));console_putc(' ');console_write(u->enabled?(u->configured?"enabled":"setup-required"):"disabled");console_putc(' ');console_write(u->name);console_putc('\n');}}
+static void cmd_whoami(const char*a){(void)a;const struct account_info*u=account_current();console_write(u?u->name:"system");console_putc('\n');}
+static void cmd_id(const char*a){(void)a;const struct account_info*u=account_current();console_write("UID=");console_write_u64(u?u->uid:0);console_write(" GID=");console_write_u64(u?u->gid:0);console_putc('\n');}
+static void cmd_groups(const char*a){(void)a;const struct account_info*u=account_current();console_write(u&&u->type==ACCOUNT_ADMIN?"users admin\n":u&&u->type==ACCOUNT_SERVICE?"services\n":"users\n");}
+static void cmd_useradd(const char*a){char b[160];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*name=next_arg(&p),*password=next_arg(&p),*role=next_arg(&p);enum account_type type=role&&streq(role,"admin")?ACCOUNT_ADMIN:role&&streq(role,"service")?ACCOUNT_SERVICE:ACCOUNT_STANDARD;uint32_t uid;if(!name||!password||account_create(name,password,type,&uid)||!account_save())console_write("USERADD FAILED. USAGE: USERADD NAME PASSWORD [ADMIN|SERVICE]\n");else{console_write("CREATED UID ");console_write_u64(uid);console_putc('\n');}}
+static void cmd_userdel(const char*a){if(account_remove(a)||!account_save())console_write("USERDEL FAILED\n");else console_write("ACCOUNT REMOVED\n");}
+static void cmd_passwd(const char*a){char b[128];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*name=next_arg(&p),*password=next_arg(&p);if(!name||!password||account_set_password(name,password)||!account_save())console_write("PASSWD FAILED\n");else console_write("PASSWORD UPDATED\n");}
+static void cmd_usermod(const char*a){char b[96];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*name=next_arg(&p),*action=next_arg(&p);int e=-1;if(name&&action){if(streq(action,"enable"))e=account_disable(name,false);else if(streq(action,"disable"))e=account_disable(name,true);else if(streq(action,"admin"))e=account_set_type(name,ACCOUNT_ADMIN);else if(streq(action,"standard"))e=account_set_type(name,ACCOUNT_STANDARD);}if(e||!account_save())console_write("USERMOD FAILED\n");else console_write("ACCOUNT UPDATED\n");}
+static void cmd_login(const char*a){char b[128];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*name=next_arg(&p),*password=next_arg(&p);int uid=name&&password?account_authenticate(name,password,hardware_uptime_ms()):-1;if(uid<0||!account_begin_session((uint32_t)uid))console_write("LOGIN FAILED\n");else console_write("LOGIN SUCCESSFUL\n");}
+static void cmd_logout(const char*a){(void)a;account_end_session();console_write("LOGGED OUT\n");}
+static void cmd_accounttest(const char*a){(void)a;bool ok=account_self_test();console_write(ok?"ACCOUNT DATABASE AND AUTH TESTS: PASS\n":"ACCOUNT DATABASE AND AUTH TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","ACCOUNT DATABASE AND AUTH TESTS");}
 static void cmd_proctest(const char*a){(void)a;bool ok=process_runtime_ready();console_write(ok?"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: PASS\n":"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 RING3 PROCESS AND SYSCALL TESTS");}
 static void cmd_rescan(const char*a){(void)a;pci_init();storage_probe_hardware();console_write("PCI AND STORAGE RESCAN COMPLETE.\n");}
 static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}if(keyboard_set_layout(args))console_write("KEYBOARD LAYOUT CHANGED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
 static void cmd_run(const char *args){char script[128];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
-static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;ps;packages;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
+static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;accounttest;accounts;ps;packages;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
 
 static void cmd_reboot(const char *args) { (void)args; LOG_INFO("reboot requested"); console_write("REBOOTING...\n"); machine_reboot(); }
 static void cmd_halt(const char *args) { (void)args; console_write("SYSTEM HALTED.\n"); machine_halt(); }
@@ -270,6 +282,7 @@ static const struct command commands[] = {
     {"pci",cmd_pci},{"disks",cmd_disks},{"layout",cmd_layout},{"run",cmd_run},{"script",cmd_script},
     {"ls",cmd_ls},{"cd",cmd_cd},{"pwd",cmd_pwd},{"cat",cmd_cat},{"touch",cmd_touch},{"mkdir",cmd_mkdir},{"cp",cmd_cp},{"mv",cmd_mv},{"rm",cmd_rm},{"ln",cmd_ln},{"chmod",cmd_chmod},{"chown",cmd_chown},{"mount",cmd_mount},{"unmount",cmd_unmount},{"df",cmd_df},{"du",cmd_du},{"fsck",cmd_fsck},{"mkfs",cmd_mkfs},{"fatls",cmd_fatls},{"fatcat",cmd_fatcat},{"storagetest",cmd_storagetest},{"hwstoragetest",cmd_hwstoragetest},{"rescan",cmd_rescan},{"partitions",cmd_partitions},
     {"ps",cmd_ps},{"proctest",cmd_proctest},{"packages",cmd_packages},
+    {"accounts",cmd_accounts},{"useradd",cmd_useradd},{"userdel",cmd_userdel},{"usermod",cmd_usermod},{"passwd",cmd_passwd},{"login",cmd_login},{"logout",cmd_logout},{"id",cmd_id},{"whoami",cmd_whoami},{"groups",cmd_groups},{"accounttest",cmd_accounttest},
     {"memmap",cmd_memmap},{"fbinfo",cmd_fbinfo},{"reboot",cmd_reboot},{"halt",cmd_halt}
 };
 

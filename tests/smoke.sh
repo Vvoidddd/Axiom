@@ -17,7 +17,7 @@ run_case(){
  grep -q 'GDT TSS IDT PIC APIC and IRQ devices online' "$log";grep -q 'application processors entered idle scheduler' "$log";grep -q "\[CMD\] $command" "$log"
  if [[ $command == fault ]];then grep -q '\[ERROR\] CPU exception' "$log";grep -q 'VECTOR=0x0000000000000006' "$log"
  elif [[ $command == storagetest ]];then grep -q '\[PASS\] PHASE 2 STORAGE RECOVERY TESTS' "$log";grep -q '\[INFO\] reboot requested' "$log"
- else grep -q '\[CMD\] version' "$log";grep -q '\[CMD\] heaptest' "$log";grep -q '\[PASS\] HEAP MAP ALLOCATE FREE TEST' "$log";grep -q '\[CMD\] packages' "$log";grep -q '\[INFO\] launching user-space init and shell' "$log";grep -q '\[SPAWN\] /system/bin/shell' "$log";grep -q '\[SPAWN\] /apps/hello' "$log";grep -q '\[INFO\] ring 3 ELF syscall and IPC probe passed' "$log";grep -q '\[INFO\] preemptive ring 3 scheduler probe passed' "$log";grep -q '\[PASS\] PHASE 3 RING3 PROCESS AND SYSCALL TESTS' "$log";grep -q '\[INFO\] reboot requested' "$log";fi
+ else grep -q '\[CMD\] version' "$log";grep -q '\[CMD\] heaptest' "$log";grep -q '\[PASS\] HEAP MAP ALLOCATE FREE TEST' "$log";grep -q '\[PASS\] ACCOUNT DATABASE AND AUTH TESTS' "$log";grep -q '\[CMD\] packages' "$log";grep -q '\[INFO\] launching user-space init and shell' "$log";grep -q '\[SPAWN\] /system/bin/shell' "$log";grep -q '\[SPAWN\] /apps/hello' "$log";grep -q '\[INFO\] ring 3 ELF syscall and IPC probe passed' "$log";grep -q '\[INFO\] preemptive ring 3 scheduler probe passed' "$log";grep -q '\[PASS\] PHASE 3 RING3 PROCESS AND SYSCALL TESTS' "$log";grep -q '\[INFO\] reboot requested' "$log";fi
  grep -q '\[ERROR\] CPU exception' "$log"&&[[ $command != fault ]]&&return 1
  echo "PASS: $name"
 }
