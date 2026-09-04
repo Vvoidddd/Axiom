@@ -39,6 +39,7 @@ bool account_begin_session(uint32_t uid);
 void account_end_session(void);
 const struct account_info *account_current(void);
 const struct account_info *account_at(uint32_t index);
+const struct account_info *account_named(const char *name);
 uint32_t account_count(void);
 const char *account_type_name(enum account_type type);
 bool account_self_test(void);

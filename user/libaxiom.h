@@ -8,6 +8,7 @@ void ax_puts(const char*text);
 long ax_key_poll(void);
 long ax_command(const char*line);
 long ax_spawn(const char*path);
+long ax_service_heartbeat(void);
 void ax_sleep(uint64_t milliseconds);
 size_t ax_strlen(const char*text);
 int ax_streq(const char*a,const char*b);

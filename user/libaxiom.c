@@ -8,4 +8,5 @@ void ax_puts(const char*t){ax_write(t,ax_strlen(t));}
 long ax_key_poll(void){return ax_syscall4(SYS_KEY_POLL,0,0,0,0);}
 long ax_command(const char*t){return ax_syscall4(SYS_COMMAND,(long)t,0,0,0);}
 long ax_spawn(const char*p){return ax_syscall4(SYS_SPAWN,(long)p,0,0,0);}
+long ax_service_heartbeat(void){return ax_syscall4(SYS_SERVICE_HEARTBEAT,0,0,0,0);}
 void ax_sleep(uint64_t ms){ax_syscall4(SYS_SLEEP,(long)ms,0,0,0);}

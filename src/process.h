@@ -54,5 +54,7 @@ bool process_runtime_ready(void);
 bool process_grant_current_capability(uint64_t capability,uint64_t expiry_ms);
 bool process_current_has_capability(uint64_t capability,uint64_t now_ms);
 bool process_current_identity(uint32_t *real_uid,uint32_t *effective_uid,uint32_t *effective_gid);
+int process_spawn_service(const char *path,uint32_t uid,uint32_t gid);
+bool process_stop_service(uint32_t pid);
 
 #endif

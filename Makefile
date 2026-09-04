@@ -26,7 +26,8 @@ OBJECTS += $(patsubst src/%.S,$(BUILD)/obj/%.S.o,$(ASM_SOURCES))
 USER_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-protector -fno-pic -m64 -mno-red-zone -Isdk/include -Iuser
 USER_LDFLAGS := -m elf_x86_64 -nostdlib -static -z noexecstack -T user/linker.ld
 USER_COMMON := $(BUILD)/user/crt0.o $(BUILD)/user/libaxiom.o
-USER_BINS := $(BUILD)/user/init.elf $(BUILD)/user/shell.elf $(BUILD)/user/hello.elf
+USER_BINS := $(BUILD)/user/init.elf $(BUILD)/user/shell.elf $(BUILD)/user/hello.elf \
+	$(BUILD)/user/loggerd.elf $(BUILD)/user/deviced.elf
 
 .PHONY: all iso run-bios run-uefi test clean distclean
 all: $(KERNEL)
@@ -56,6 +57,12 @@ $(BUILD)/user/shell.elf: $(USER_COMMON) $(BUILD)/user/shell.o user/linker.ld
 
 $(BUILD)/user/hello.elf: $(USER_COMMON) $(BUILD)/user/hello.o user/linker.ld
 	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/hello.o -o $@
+
+$(BUILD)/user/loggerd.elf: $(USER_COMMON) $(BUILD)/user/loggerd.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/loggerd.o -o $@
+
+$(BUILD)/user/deviced.elf: $(USER_COMMON) $(BUILD)/user/deviced.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/deviced.o -o $@
 
 $(BUILD)/obj/user_bins.S.o: $(USER_BINS)
 

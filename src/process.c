@@ -7,11 +7,13 @@
 #include "console.h"
 #include "log.h"
 #include "account.h"
+#include "service.h"
 
 struct process_slot {
     struct process_info info;
     bool occupied;
     bool user_task;
+    bool system_task;
     uint64_t frame[22];
     struct user_image image;
 };
@@ -83,8 +85,9 @@ static void load_cr3(uint64_t root){__asm__ volatile("mov %0,%%cr3"::"r"(root):"
 static void apply_credentials(const struct process_info*p){uint32_t groups[ACCOUNT_GROUP_MAX];uint32_t count=account_groups_for_uid(p->effective_uid,groups,ACCOUNT_GROUP_MAX);uint32_t mask=0022;for(uint32_t i=0;i<account_count();i++){const struct account_info*a=account_at(i);if(a&&a->uid==p->effective_uid){mask=a->creation_mask;break;}}uint64_t caps=p->capability_expiry_ms>=hardware_uptime_ms()?p->capabilities:0;vfs_set_security_context(p->effective_uid,p->effective_gid,groups,count,mask,caps);}
 static bool choose_user(uint32_t previous,uint32_t*out){for(uint32_t step=1;step<=PROCESS_MAX;step++){uint32_t candidate=(previous+step)%PROCESS_MAX;if(table[candidate].occupied&&table[candidate].user_task&&table[candidate].info.state==PROCESS_READY){*out=candidate;return true;}}return false;}
 static bool any_live_user(void){for(unsigned i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task&&table[i].info.state!=PROCESS_ZOMBIE)return true;return false;}
+static bool any_live_session(void){for(unsigned i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task&&!table[i].system_task&&table[i].info.state!=PROCESS_ZOMBIE)return true;return false;}
 static bool copy_user_string(uint64_t address,char*out,size_t capacity){if(!address||!out||capacity<2||!table[current_slot].user_task)return false;for(size_t i=0;i<capacity;i++){if(!vmm_space_user_range_valid(&table[current_slot].image.space,address+i,1,false))return false;char c=*(const char*)(uintptr_t)(address+i);out[i]=c;if(!c)return true;}out[capacity-1]=0;return false;}
-static void switch_user_frame(uint64_t*frame,bool save_current){uint32_t previous=current_slot;if(save_current)for(unsigned i=0;i<22;i++)table[previous].frame[i]=frame[i];if(table[previous].info.state==PROCESS_RUNNING)table[previous].info.state=PROCESS_READY;uint32_t next;if(!choose_user(previous,&next)){/* There is no kernel idle task yet. Never return to a zombie frame or let
+static void switch_user_frame(uint64_t*frame,bool save_current){uint32_t previous=current_slot;if(save_current)for(unsigned i=0;i<22;i++)table[previous].frame[i]=frame[i];if(table[previous].info.state==PROCESS_RUNNING)table[previous].info.state=PROCESS_READY;if(session_launch&&!any_live_session()){uint64_t result=0x100u+((uint32_t)table[previous].info.exit_status&0xffu);vfs_set_credentials(0,0);arch_return_from_user(result);}uint32_t next;if(!choose_user(previous,&next)){/* There is no kernel idle task yet. Never return to a zombie frame or let
        a lone sleeper continue while still marked sleeping: wake one sleeper
        early and make the state/frame transition explicit. */for(uint32_t step=1;step<=PROCESS_MAX;step++){uint32_t candidate=(previous+step)%PROCESS_MAX;if(table[candidate].occupied&&table[candidate].user_task&&table[candidate].info.state==PROCESS_SLEEPING){table[candidate].info.state=PROCESS_READY;table[candidate].info.wake_tick=0;break;}}if(!choose_user(previous,&next)){if(table[previous].occupied&&table[previous].user_task&&table[previous].info.state==PROCESS_SLEEPING){table[previous].info.state=PROCESS_RUNNING;table[previous].info.wake_tick=0;return;}if(!any_live_user()){uint64_t result=session_launch?(0x100u+((uint32_t)table[previous].info.exit_status&0xffu)):1u;vfs_set_credentials(0,0);arch_return_from_user(result);}arch_return_from_user(2);}}current_slot=next;table[next].info.state=PROCESS_RUNNING;apply_credentials(&table[next].info);for(unsigned i=0;i<22;i++)frame[i]=table[next].frame[i];load_cr3(table[next].image.space.root_physical);}
 
@@ -122,7 +125,8 @@ void process_timer_tick(uint64_t now_ms) {
             table[i].info.state = PROCESS_READY;
     if (table[current_slot].occupied && table[current_slot].info.state == PROCESS_RUNNING)
         table[current_slot].info.runtime_ticks++;
-    if ((now_ms % 10u) == 0) schedule();
+    /* A ring-0 tick has no saved user frame to switch. User preemption is
+       performed only by process_timer_interrupt() when CPL == 3. */
 }
 void process_timer_interrupt(uint64_t*frame,uint64_t now_ms){
     if(!scheduler_active||(frame[18]&3)!=3){process_timer_tick(now_ms);return;}
@@ -134,13 +138,14 @@ bool process_syscall_interrupt(uint64_t*f){
     uint64_t number=f[14];
     for(unsigned i=0;i<22;i++)table[current_slot].frame[i]=f[i];
     if(number==0xa711){uint64_t id=f[9];if(id>=1&&id<=2)scheduler_marks[id-1]++;f[14]=0;return true;}
-    if(number==SYS_EXIT){table[current_slot].info.exit_status=(int)f[9];table[current_slot].info.state=PROCESS_ZOMBIE;switch_user_frame(f,false);return true;}
+    if(number==SYS_EXIT){table[current_slot].info.exit_status=(int)f[9];if(table[current_slot].system_task)service_process_exited(table[current_slot].info.pid,(int)f[9]);table[current_slot].info.state=PROCESS_ZOMBIE;switch_user_frame(f,false);return true;}
     if(number==SYS_SLEEP){if(f[9]>10000){f[14]=(uint64_t)-22;return true;}f[14]=0;table[current_slot].frame[14]=0;table[current_slot].info.wake_tick=hardware_uptime_ms()+f[9];table[current_slot].info.state=PROCESS_SLEEPING;scheduler_sleeps++;switch_user_frame(f,false);return true;}
     if(number==SYS_YIELD){f[14]=0;switch_user_frame(f,true);return true;}
     if(number==SYS_WRITE){size_t size=(size_t)f[8];if(size>4096||!vmm_space_user_range_valid(&table[current_slot].image.space,f[9],size,false)){f[14]=(uint64_t)-14;return true;}const char*text=(const char*)(uintptr_t)f[9];for(size_t i=0;i<size;i++)console_putc(text[i]);f[14]=size;return true;}
     if(number==SYS_KEY_POLL){struct key_event event;f[14]=keyboard_poll_event(&event)&&event.pressed&&event.character?(uint8_t)event.character:0;return true;}
     if(number==SYS_COMMAND){char line[128];if(!copy_user_string(f[9],line,sizeof(line))){f[14]=(uint64_t)-14;return true;}kernel_execute_user_command(line);f[14]=0;return true;}
     if(number==SYS_SPAWN){char path[128];if(!copy_user_string(f[9],path,sizeof(path))){f[14]=(uint64_t)-14;return true;}if(!vfs_can_access(path,VFS_EXECUTE)){account_audit("permission-denied",path);f[14]=(uint64_t)-13;return true;}struct vfs_stat st;if(vfs_stat_path(path,&st)){f[14]=(uint64_t)-2;return true;}struct user_image image;if(elf_load_vfs(path,&image)){f[14]=(uint64_t)-8;return true;}struct process_info*parent=&table[current_slot].info;int child=create_user_process(path,&image,parent->real_uid,parent->real_gid);if(child<0){f[14]=(uint64_t)child;return true;}table[child].info.parent_pid=parent->pid;table[child].info.effective_uid=(st.mode&04000)?st.uid:parent->effective_uid;table[child].info.saved_uid=table[child].info.effective_uid;table[child].info.effective_gid=(st.mode&02000)?st.gid:parent->effective_gid;table[child].info.saved_gid=table[child].info.effective_gid;table[child].info.capabilities=parent->capabilities;table[child].info.capability_expiry_ms=parent->capability_expiry_ms;f[14]=table[child].info.pid;log_write("SPAWN",path);return true;}
+    if(number==SYS_SERVICE_HEARTBEAT){if(!table[current_slot].system_task){f[14]=(uint64_t)-13;return true;}service_heartbeat(table[current_slot].info.pid,hardware_uptime_ms());f[14]=0;return true;}
     f[14]=(uint64_t)process_syscall(number,f[9],f[8],f[11],f[5]);return true;
 }
 
@@ -217,8 +222,10 @@ bool process_scheduler_self_test(void){
     uint64_t result=arch_enter_user(a.entry,a.stack_top,a.space.root_physical);scheduler_active=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;
     scheduler_ok=result==1&&scheduler_preemptions>0&&scheduler_sleeps==1&&scheduler_marks[0]==2&&scheduler_marks[1]==1&&table[first].info.state==PROCESS_ZOMBIE&&table[second].info.state==PROCESS_ZOMBIE&&table[thread].info.state==PROCESS_ZOMBIE&&table[first].info.pid==table[thread].info.pid&&table[first].info.tid!=table[thread].info.tid&&table[first].image.space.root_physical==table[thread].image.space.root_physical&&table[first].info.exit_status==1&&table[second].info.exit_status==2;if(!scheduler_ok){LOG_ERROR("scheduler result/preemptions/sleeps/marks/states");log_hex(result);log_hex(scheduler_preemptions);log_hex(scheduler_sleeps);log_hex(scheduler_marks[0]);log_hex(scheduler_marks[1]);log_hex(table[first].info.state);log_hex(table[second].info.state);log_hex(table[thread].info.state);}return scheduler_ok;
 }
-int process_launch_init(void){const struct account_info*user=account_current();if(!user)return-1;struct user_image image;if(elf_load_vfs("/system/bin/init",&image))return-1;int slot=create_user_process("init",&image,user->uid,user->gid);if(slot<0)return-1;uint32_t old=current_slot;session_launch=true;scheduler_active=true;current_slot=(uint32_t)slot;table[slot].info.state=PROCESS_RUNNING;apply_credentials(&table[slot].info);uint64_t result=arch_enter_user(image.entry,image.stack_top,image.space.root_physical);scheduler_active=false;session_launch=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;for(uint32_t i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task)table[i].occupied=false;vfs_set_credentials(0,0);return result>=0x100u&&result<0x200u?(int)(result-0x100u):-1;}
+int process_launch_init(void){const struct account_info*user=account_current();if(!user||!service_ensure_started())return-1;struct user_image image;if(elf_load_vfs("/system/bin/init",&image))return-1;int slot=create_user_process("init",&image,user->uid,user->gid);if(slot<0)return-1;uint32_t old=current_slot;session_launch=true;scheduler_active=true;current_slot=(uint32_t)slot;table[slot].info.state=PROCESS_RUNNING;apply_credentials(&table[slot].info);uint64_t result=arch_enter_user(image.entry,image.stack_top,image.space.root_physical);scheduler_active=false;session_launch=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;for(uint32_t i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].user_task&&!table[i].system_task)table[i].occupied=false;vfs_set_credentials(0,0);return result>=0x100u&&result<0x200u?(int)(result-0x100u):-1;}
 bool process_runtime_ready(void){return user_mode_ok&&scheduler_ok;}
 bool process_grant_current_capability(uint64_t cap,uint64_t expiry){if(!scheduler_active||!table[current_slot].user_task)return false;table[current_slot].info.capabilities|=cap;table[current_slot].info.capability_expiry_ms=expiry;apply_credentials(&table[current_slot].info);return true;}
 bool process_current_has_capability(uint64_t cap,uint64_t now){if(!table[current_slot].occupied)return false;struct process_info*p=&table[current_slot].info;if(p->effective_uid==0)return true;if(!account_is_admin(p->real_uid)||now>p->capability_expiry_ms){p->capabilities=0;return false;}return(p->capabilities&cap)==cap;}
 bool process_current_identity(uint32_t*r,uint32_t*e,uint32_t*g){if(!table[current_slot].occupied)return false;if(r)*r=table[current_slot].info.real_uid;if(e)*e=table[current_slot].info.effective_uid;if(g)*g=table[current_slot].info.effective_gid;return true;}
+int process_spawn_service(const char*path,uint32_t uid,uint32_t gid){for(uint32_t i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].system_task&&table[i].info.state==PROCESS_ZOMBIE)table[i].occupied=false;struct user_image image;if(elf_load_vfs(path,&image))return-1;int slot=create_user_process(path,&image,uid,gid);if(slot<0)return slot;table[slot].system_task=true;table[slot].info.parent_pid=1;log_write("SERVICE-SPAWN",path);return(int)table[slot].info.pid;}
+bool process_stop_service(uint32_t pid){for(uint32_t i=0;i<PROCESS_MAX;i++)if(table[i].occupied&&table[i].system_task&&table[i].info.pid==pid){table[i].info.state=PROCESS_ZOMBIE;return true;}return false;}

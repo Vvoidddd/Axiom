@@ -41,6 +41,7 @@ run_session_case() {
         echo "screendump $out-$firmware-locked.ppm"
         keys axiomadmin; sleep 1
         keys axiomtest123; sleep 3
+        keys servicetest; sleep 1
         keys logout; sleep 2
         echo "screendump $out-$firmware-logout.ppm"
         echo quit
@@ -52,6 +53,8 @@ run_session_case() {
     grep -q 'session processes inherit authenticated credentials' "$log"
     grep -q 'session locked; returning to login' "$log"
     grep -q 'session logged out; returning to login' "$log"
+    grep -q '\[PASS\] USER-SPACE SERVICE SUPERVISION TEST' "$log"
+    [[ $(grep -c '\[SERVICE-SPAWN\]' "$log") -eq 2 ]]
     [[ $(grep -c 'graphical login successful' "$log") -ge 2 ]]
     ! grep -q '\[ERROR\] CPU exception' "$log"
     test -s "$out-$firmware-terminal.ppm"
