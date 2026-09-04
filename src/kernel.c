@@ -249,7 +249,7 @@ static void cmd_fsck(const char*a){bool repair=streq(a,"-r")||streq(a,"--repair"
 static void cmd_mkfs(const char*a){if(!streq(a,"ram0")){console_write("REFUSING: MKFS REQUIRES EXPLICIT RAM0 TEST DEVICE.\n");return;}struct block_device*d=block_device_at(0);console_write(axiomfs_format(d,0,d->sectors)?"FORMAT FAILED\n":"AXIOMFS V2 FORMAT COMPLETE\n");}
 static void cmd_storagetest(const char*a){(void)a;bool ok=storage_self_test();struct block_device*d=block_device_at(0);ok=ok&&axiomfs_self_test(d);ok=ok&&!axiomfs_simulate_interrupted_write(d,0);ok=ok&&axiomfs_check(d,0,false)==-2;ok=ok&&!axiomfs_check(d,0,true);ok=ok&&fat32_self_test(d);ok=ok&&vfs_self_test();ok=ok&&vfs_open("/does/not/exist",VFS_READ)==VFS_ENOENT;console_write(ok?"PHASE 2 STORAGE RECOVERY TESTS: PASS\n":"PHASE 2 STORAGE RECOVERY TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 2 STORAGE RECOVERY TESTS");}
 static void cmd_hwstoragetest(const char*a){(void)a;uint32_t tested=0;bool ok=storage_hardware_self_test(&tested);console_write(ok?"HARDWARE STORAGE READ TEST: PASS, DEVICES=":"HARDWARE STORAGE READ TEST: FAIL, DEVICES=");console_write_u64(tested);console_putc('\n');log_write(ok?"PASS":"FAIL","HARDWARE STORAGE DEVICE ATTACHED AND READ ONLY");}
-static void cmd_ps(const char*a){(void)a;console_write("PID TID PPID UID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.tid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
+static void cmd_ps(const char*a){(void)a;console_write("PID TID PPID RUID:EUID STATE TICKS NAME\n");for(uint32_t i=0;i<process_count();i++){struct process_info p;if(!process_info_at(i,&p))continue;console_write_u64(p.pid);console_putc(' ');console_write_u64(p.tid);console_putc(' ');console_write_u64(p.parent_pid);console_putc(' ');console_write_u64(p.real_uid);console_putc(':');console_write_u64(p.effective_uid);console_putc(' ');console_write(process_state_name(p.state));console_putc(' ');console_write_u64(p.runtime_ticks);console_putc(' ');console_write(p.name);console_putc('\n');}}
 static void cmd_packages(const char*a){(void)a;console_write("NAME VERSION ABI EXECUTABLE\n");for(uint32_t i=0;i<package_count();i++){const struct package_info*p=package_at(i);console_write(p->name);console_putc(' ');console_write(p->version);console_putc(' ');console_write_u64(p->abi);console_putc(' ');console_write(p->executable);console_putc('\n');}}
 static void cmd_accounts(const char*a){(void)a;console_write("UID GID TYPE STATE NAME\n");for(uint32_t i=0;i<account_count();i++){const struct account_info*u=account_at(i);console_write_u64(u->uid);console_putc(' ');console_write_u64(u->gid);console_putc(' ');console_write(account_type_name(u->type));console_putc(' ');console_write(u->enabled?(u->configured?"enabled":"setup-required"):"disabled");console_putc(' ');console_write(u->name);console_putc('\n');}}
 static void cmd_whoami(const char*a){(void)a;const struct account_info*u=account_current();console_write(u?u->name:"system");console_putc('\n');}
@@ -428,15 +428,18 @@ void kmain(void) {
     splash();
     loading_screen();
     first_boot_setup();
-    graphical_login();
-    console_init();
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
     LOG_INFO("preemptive ring 3 scheduler probe passed");
     storage_probe_hardware();
     smp_start(mp_request.response);
-    LOG_INFO("launching user-space init and shell");
-    if(!process_launch_init())LOG_ERROR("user-space init failed or exited abnormally");
-    LOG_WARN("user shell exited; entering kernel recovery console");
-    console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");
-    shell();
+    for(;;){
+        graphical_login();
+        console_init();
+        LOG_INFO("launching user-space init and shell");
+        LOG_INFO("session processes inherit authenticated credentials");
+        int status=process_launch_init();
+        account_end_session();
+        if(status<0){LOG_ERROR("user-space init failed; entering kernel recovery console");console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");shell();}
+        LOG_INFO(status==65?"session locked; returning to login":"session logged out; returning to login");
+    }
 }
