@@ -14,6 +14,7 @@ int account_set_password(const char *name,const char *password);
 int account_set_type(const char *name,enum account_type type);
 bool account_save(void);
 bool account_load(void);
+bool account_has_admin(void);
 bool account_begin_session(uint32_t uid);
 void account_end_session(void);
 const struct account_info *account_current(void);

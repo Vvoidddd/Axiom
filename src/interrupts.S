@@ -143,6 +143,7 @@ arch_return_from_user:
     popq %r12
     popq %rbx
     popq %rbp
+    sti
     ret
 
 .section .rodata
