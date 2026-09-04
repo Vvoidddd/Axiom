@@ -18,6 +18,7 @@
 #include "initramfs.h"
 #include "process.h"
 #include "package.h"
+#include "account.h"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(6);
@@ -336,7 +337,7 @@ static const char *load_items[] = {
     "Block storage and partitions", "Virtual filesystem", "Embedded initramfs",
     "Process and syscall manager", "Command console",
     "Interrupt and privilege gates", "Ring 3 syscall runtime",
-    "Preemptive process scheduler"
+    "Preemptive process scheduler", "Identity and authentication"
 };
 #define LOAD_ITEM_COUNT (sizeof(load_items)/sizeof(load_items[0]))
 #define LOAD_RED 0xff5f6d
@@ -394,6 +395,7 @@ static void loading_screen(void) {
     load_finish(14,passed);failed|=!passed;
     load_begin(15);passed=process_user_mode_self_test();load_finish(15,passed);failed|=!passed;
     load_begin(16);passed=passed&&process_scheduler_self_test();load_finish(16,passed);failed|=!passed;
+    load_begin(17);account_init();passed=account_self_test();load_finish(17,passed);failed|=!passed;
     fb_text(120,580,failed?"[ FAILED ] SYSTEM IS NOT SAFE TO BOOT":"[ OK ] ALL REQUIRED TESTS PASSED",failed?LOAD_RED:LOAD_GREEN,2);
     pit_wait_ms(failed?3000:900);
     if(failed)machine_halt();

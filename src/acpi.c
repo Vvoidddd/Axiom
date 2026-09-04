@@ -1,5 +1,6 @@
 #include "acpi.h"
 #include "io.h"
+#include "hardware.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -54,4 +55,4 @@ bool acpi_shutdown(void){if(!pm1a_control||!s5_type)return false;outw(pm1a_contr
 static uint8_t rtc_register(uint8_t reg){outb(0x70,reg);return inb(0x71);}
 static uint8_t bcd(uint8_t x){return (uint8_t)((x&15)+10*(x>>4));}
 void rtc_read(struct rtc_time *t){while(rtc_register(0x0a)&0x80){}uint8_t status=rtc_register(0x0b);t->second=rtc_register(0);t->minute=rtc_register(2);t->hour=rtc_register(4);t->day=rtc_register(7);t->month=rtc_register(8);uint8_t year=rtc_register(9);if(!(status&4)){t->second=bcd(t->second);t->minute=bcd(t->minute);t->hour=bcd(t->hour&0x7f);t->day=bcd(t->day);t->month=bcd(t->month);year=bcd(year);}t->year=2000+year;}
-uint64_t entropy_seed(void){uint64_t value;unsigned char ok;__asm__ volatile("rdrand %0; setc %1":"=r"(value),"=qm"(ok));if(ok)return value;uint32_t low,high;__asm__ volatile("rdtsc":"=a"(low),"=d"(high));return (((uint64_t)high<<32)|low)^lapic_address;}
+uint64_t entropy_seed(void){uint32_t a=1,b,c,d;__asm__ volatile("cpuid":"+a"(a),"=b"(b),"=c"(c),"=d"(d));if(c&(1u<<30)){uint64_t value;unsigned char ok;__asm__ volatile("rdrand %0; setc %1":"=r"(value),"=qm"(ok));if(ok)return value;}(void)b;(void)d;uint32_t low,high;__asm__ volatile("rdtsc":"=a"(low),"=d"(high));return (((uint64_t)high<<32)|low)^lapic_address^hardware_uptime_ms();}
