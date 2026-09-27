@@ -3,152 +3,146 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Axiom is an independent x86-64 hobby operating system built from scratch in freestanding C.">
-  <meta name="theme-color" content="#090d12">
-  <title>Axiom OS — Your system. Your rules.</title>
+  <meta name="description" content="Axiom is a personal x86-64 operating-system project built from scratch in freestanding C.">
+  <meta name="theme-color" content="#0b0d0f">
+  <title>Axiom OS — development notes</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#content">Skip to content</a>
 
   <header class="site-header">
-    <a class="brand" href="#top" aria-label="Axiom home">
-      <span class="brand-mark" aria-hidden="true">A</span>
-      <span>AXIOM</span>
-    </a>
+    <a class="wordmark" href="#top" aria-label="Axiom home"><span>AXIOM</span><small>/os</small></a>
     <nav aria-label="Primary navigation">
-      <a href="#features">Features</a>
+      <a href="#about">About</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#build">Build</a>
-      <a href="https://github.com/Vvoidddd/Axiom">GitHub</a>
+      <a href="https://github.com/Vvoidddd/Axiom">Repository ↗</a>
     </nav>
   </header>
 
-  <main id="main">
-    <section class="hero" id="top">
-      <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot"></span> x86-64 · BIOS + UEFI · Freestanding C</p>
-        <h1>Your system.<br><span>Your rules.</span></h1>
-        <p class="lede">Axiom is an independent operating system built from the kernel up—bootloader, memory management, files, processes, users, and everything still to come.</p>
+  <main id="content">
+    <section class="intro" id="top">
+      <div class="intro-copy">
+        <p class="kicker">Personal systems project · x86-64</p>
+        <h1>A hobby OS,<br>built to understand<br><em>the whole stack.</em></h1>
+        <p class="summary">Axiom is the operating system I work on in my spare time. It is written in freestanding C, boots through Limine, and is slowly growing from a terminal kernel into a usable desktop system.</p>
+        <p class="honest-note">It is experimental, incomplete, and not a Linux distribution. That is the point.</p>
         <div class="actions">
-          <a class="button primary" href="https://github.com/Vvoidddd/Axiom/releases/latest">Download stable</a>
-          <a class="button secondary" href="https://github.com/Vvoidddd/Axiom">View source</a>
-        </div>
-        <p class="release-note">Current development series: Axiom 0.5 · Experimental software</p>
-      </div>
-
-      <div class="terminal" aria-label="Axiom boot sequence preview">
-        <div class="terminal-bar">
-          <span></span><span></span><span></span>
-          <p>AXIOM BOOT</p>
-        </div>
-        <div class="terminal-screen">
-          <p class="terminal-title">AXIOM</p>
-          <p class="muted">Your system. Your rules.</p>
-          <div class="boot-lines" aria-hidden="true">
-            <p><span>Framebuffer console</span><strong>[ OK ]</strong></p>
-            <p><span>Memory manager</span><strong>[ OK ]</strong></p>
-            <p><span>Filesystem services</span><strong>[ OK ]</strong></p>
-            <p><span>User-space runtime</span><strong>[ OK ]</strong></p>
-            <p><span>Security subsystem</span><strong>[ OK ]</strong></p>
-          </div>
-          <p class="prompt"><span>axiom&gt;</span> sysinfo<span class="cursor">_</span></p>
-          <p class="output">AXIOM 0.5 · x86_64 · READY</p>
+          <a class="button primary" id="iso-download" href="https://github.com/Vvoidddd/Axiom/releases/latest/download/axiom.iso">Download latest ISO</a>
+          <a class="button" href="https://github.com/Vvoidddd/Axiom/tree/daily">Browse daily branch</a>
         </div>
       </div>
+
+      <aside class="project-state" aria-label="Live project state">
+        <div class="panel-title"><span>project.state</span><span class="live"><i></i> live</span></div>
+        <dl>
+          <div><dt>development</dt><dd id="kernel-version">checking…</dd></div>
+          <div><dt>stable release</dt><dd id="release-version">checking…</dd></div>
+          <div><dt>architecture</dt><dd>x86-64</dd></div>
+          <div><dt>firmware</dt><dd>BIOS / UEFI</dd></div>
+          <div><dt>language</dt><dd>freestanding C</dd></div>
+          <div><dt>status</dt><dd>experimental</dd></div>
+        </dl>
+        <div class="sync-state" id="sync-state">Connecting to GitHub…</div>
+      </aside>
     </section>
 
-    <section class="section" id="features">
-      <div class="section-heading">
-        <p class="eyebrow">Built, not assembled</p>
-        <h2>A real kernel, one layer at a time.</h2>
-        <p>Axiom currently boots into a protected user-space terminal and includes the foundations needed to grow into a complete desktop operating system.</p>
-      </div>
-      <div class="feature-grid">
-        <article>
-          <span class="feature-number">01</span>
-          <h3>Dual-firmware boot</h3>
-          <p>A single hybrid ISO boots through Limine on legacy BIOS and modern UEFI machines.</p>
-        </article>
-        <article>
-          <span class="feature-number">02</span>
-          <h3>Memory and hardware</h3>
-          <p>Paging, kernel heap, SMP startup, interrupts, ACPI, PCI, AHCI, and NVMe discovery.</p>
-        </article>
-        <article>
-          <span class="feature-number">03</span>
-          <h3>Storage and files</h3>
-          <p>A bounded VFS, read-only FAT32 support, and persistent journaled AxiomFS v2 storage.</p>
-        </article>
-        <article>
-          <span class="feature-number">04</span>
-          <h3>Protected user space</h3>
-          <p>Ring-3 ELF programs, isolated address spaces, preemptive scheduling, IPC, and syscall ABI v1.</p>
-        </article>
-        <article>
-          <span class="feature-number">05</span>
-          <h3>Accounts and security</h3>
-          <p>Graphical login, password verifiers, users and groups, permissions, scoped elevation, and auditing.</p>
-        </article>
-        <article>
-          <span class="feature-number">06</span>
-          <h3>Tested startup</h3>
-          <p>Every critical subsystem visibly moves from not tested, to testing, to OK before login.</p>
-        </article>
+    <section class="section about" id="about">
+      <div class="section-label"><span>01</span> README</div>
+      <div class="about-grid">
+        <div>
+          <h2>Why build an OS?</h2>
+          <p>I wanted a project where abstractions eventually run out. Axiom starts at the boot protocol and works upward through interrupts, memory, storage, processes, accounts, services, graphics, sound, and applications.</p>
+          <p>The goal is not to replace a daily-driver OS tomorrow. The goal is to keep making each layer real, understandable, and testable.</p>
+        </div>
+        <div class="principles">
+          <h3>Project rules</h3>
+          <ul>
+            <li><span>01</span> Build the core rather than hiding it behind a framework.</li>
+            <li><span>02</span> Keep the source readable enough to learn from later.</li>
+            <li><span>03</span> Test every boot milestone in BIOS and UEFI QEMU.</li>
+            <li><span>04</span> Keep physical disks read-only until writes are trustworthy.</li>
+            <li><span>05</span> Preserve a terminal recovery path as the desktop grows.</li>
+          </ul>
+        </div>
       </div>
     </section>
 
-    <section class="section roadmap-section" id="roadmap">
-      <div class="section-heading">
-        <p class="eyebrow">Development roadmap</p>
-        <h2>From terminal to desktop.</h2>
-      </div>
-      <ol class="roadmap">
-        <li class="done"><span>01</span><div><strong>Stable terminal kernel</strong><small>Complete</small></div></li>
-        <li class="done"><span>02</span><div><strong>Storage and files</strong><small>Complete</small></div></li>
-        <li class="done"><span>03</span><div><strong>Processes and user space</strong><small>Complete</small></div></li>
-        <li class="active"><span>3B</span><div><strong>Core system services</strong><small>In development</small></div></li>
-        <li><span>04</span><div><strong>Input, graphics, and desktop</strong><small>Planned</small></div></li>
-        <li><span>05</span><div><strong>Sound and media</strong><small>Planned</small></div></li>
-        <li><span>06</span><div><strong>Networking and applications</strong><small>Planned</small></div></li>
-        <li><span>07</span><div><strong>Reliability and releases</strong><small>Planned</small></div></li>
-      </ol>
-      <a class="text-link" href="https://github.com/Vvoidddd/Axiom/blob/stable/TODO.md">Read the complete roadmap →</a>
-    </section>
-
-    <section class="section build-section" id="build">
-      <div class="build-copy">
-        <p class="eyebrow">Try it in a virtual machine</p>
-        <h2>One command to build.</h2>
-        <p>Use Arch WSL or another compatible Linux environment. The build script checks its tools, performs a clean rebuild, and places the hybrid image beside the README.</p>
-        <p class="warning">Axiom is experimental. Test it in QEMU before considering real hardware, and never use a disk containing important data.</p>
-      </div>
-      <div class="code-card">
-        <div><span>WSL / Linux</span><button type="button" data-copy="git clone https://github.com/Vvoidddd/Axiom.git&#10;cd Axiom&#10;./all" aria-label="Copy build commands">Copy</button></div>
-        <pre><code><span class="dim">$</span> git clone https://github.com/Vvoidddd/Axiom.git
-<span class="dim">$</span> cd Axiom
-<span class="dim">$</span> ./all
-
-<span class="success">Axiom build complete: axiom.iso</span></code></pre>
+    <section class="section stack">
+      <div class="section-label"><span>02</span> CURRENT STACK</div>
+      <div class="stack-grid">
+        <article><small>BOOT</small><h3>Limine v12</h3><p>One hybrid image for legacy BIOS and UEFI.</p></article>
+        <article><small>KERNEL</small><h3>Ring 0 / SMP</h3><p>Paging, heap, interrupts, AP startup, ACPI, and PCI.</p></article>
+        <article><small>STORAGE</small><h3>VFS + AxiomFS</h3><p>Journaled native storage, FAT32 reads, AHCI, and NVMe.</p></article>
+        <article><small>USER SPACE</small><h3>ELF64 / Ring 3</h3><p>Processes, threads, syscalls, IPC, users, and permissions.</p></article>
+        <article><small>SERVICES</small><h3>In progress</h3><p>Supervised service processes and declarative configuration.</p></article>
+        <article><small>DESKTOP</small><h3>Planned</h3><p>Input, compositor, toolkit, core apps, audio, and networking.</p></article>
       </div>
     </section>
 
-    <section class="cta">
-      <p class="eyebrow">Follow the build</p>
-      <h2>An operating system in the making.</h2>
-      <p>Explore the code, download a stable image, or watch Axiom grow from a terminal kernel into a graphical desktop OS.</p>
-      <div class="actions">
-        <a class="button primary" href="https://github.com/Vvoidddd/Axiom">Open on GitHub</a>
-        <a class="button secondary" href="https://github.com/Vvoidddd/Axiom/releases">All releases</a>
+    <section class="section repository-section">
+      <div class="section-label"><span>03</span> REPOSITORY</div>
+      <div class="repo-grid">
+        <div>
+          <p class="label">Latest daily commit</p>
+          <a id="commit-link" class="commit" href="https://github.com/Vvoidddd/Axiom/commits/daily">
+            <code id="commit-sha">loading</code>
+            <span id="commit-message">Reading stable branch…</span>
+          </a>
+          <p class="metadata" id="commit-date">—</p>
+        </div>
+        <div class="branches">
+          <p class="label">Branch model</p>
+          <a href="https://github.com/Vvoidddd/Axiom/tree/stable"><code>stable</code><span>Tested source and release builds</span></a>
+          <a href="https://github.com/Vvoidddd/Axiom/tree/daily"><code>daily</code><span>Active work and incomplete phases</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap">
+      <div class="section-label"><span>04</span> ROADMAP · LIVE FROM DAILY/TODO.md</div>
+      <div class="roadmap-header">
+        <div>
+          <h2>What exists, and what comes next.</h2>
+          <p>This view is generated from the daily branch’s <a href="https://github.com/Vvoidddd/Axiom/blob/daily/TODO.md">TODO.md</a>. Pushing progress updates this roadmap—there is no second list to maintain.</p>
+        </div>
+        <div class="overall-progress" aria-live="polite">
+          <strong id="roadmap-percent">—</strong>
+          <span id="roadmap-count">syncing tasks</span>
+        </div>
+      </div>
+      <div class="progress-track" aria-hidden="true"><span id="roadmap-progress"></span></div>
+      <div class="roadmap-list" id="roadmap-list" aria-live="polite">
+        <div class="roadmap-loading">Reading TODO.md from GitHub…</div>
+      </div>
+      <p class="roadmap-source" id="roadmap-source">Source: <code>daily/TODO.md</code></p>
+    </section>
+
+    <section class="section build" id="build">
+      <div class="section-label"><span>05</span> BUILD / RUN</div>
+      <div class="build-grid">
+        <div>
+          <h2>Reproduce it locally.</h2>
+          <p>The normal workflow uses Arch WSL. <code>./all</code> checks dependencies, cleans old output, builds the freestanding kernel, and packages a hybrid ISO beside the README.</p>
+          <p class="caution"><strong>Heads up:</strong> use QEMU first. Axiom is hobby software and should not be trusted with important physical disks or data.</p>
+        </div>
+        <div class="code-window">
+          <div><span>~/src/axiom</span><button type="button" data-copy="git clone -b stable https://github.com/Vvoidddd/Axiom.git&#10;cd Axiom&#10;./all" aria-label="Copy build commands">copy</button></div>
+          <pre><code><span>$</span> git clone -b stable https://github.com/Vvoidddd/Axiom.git
+<span>$</span> cd Axiom
+<span>$</span> ./all
+
+<b>Axiom build complete: axiom.iso</b></code></pre>
+        </div>
       </div>
     </section>
   </main>
 
   <footer>
-    <a class="brand" href="#top"><span class="brand-mark" aria-hidden="true">A</span><span>AXIOM</span></a>
-    <p>Built from scratch by Vvoidddd.</p>
-    <p><a href="https://github.com/Vvoidddd/Axiom">Source</a> · <a href="https://github.com/Vvoidddd/Axiom/issues">Issues</a></p>
+    <p><strong>AXIOM</strong> / a side project by <a href="https://github.com/Vvoidddd">Vvoidddd</a></p>
+    <p><a href="https://github.com/Vvoidddd/Axiom">source</a> · <a href="https://github.com/Vvoidddd/Axiom/releases">releases</a> · <a href="https://github.com/Vvoidddd/Axiom/issues">issues</a></p>
   </footer>
 
   <script src="assets/site.js"></script>
