@@ -49,6 +49,7 @@ tests on both BIOS and UEFI.
 - [x] Persist the AxiomFS tree, timestamps, ownership, modes, links, extended attributes, sparse data, and quotas.
 - [x] Validate MBR/GPT parsing, damaged metadata repair, cache/device loss, and write-disabled physical disks.
 - [x] Add stable and daily branch publishing scripts plus automated stable ISO Releases.
+- [x] Launch the public Axiom project website through GitHub Pages from the stable branch.
 - [x] Define syscall ABI v1 and execute validated static ELF64 programs at ring 3.
 - [x] Give user processes isolated CR3 address spaces with validated user-copy boundaries.
 - [x] Preempt user processes and shared-address-space threads with PIT-driven context switching.
