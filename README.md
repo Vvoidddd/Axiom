@@ -1,5 +1,8 @@
 # Axiom
 
+**Website:** [vvoidddd.github.io/Axiom](https://vvoidddd.github.io/Axiom/) ·
+**Stable downloads:** [GitHub Releases](https://github.com/Vvoidddd/Axiom/releases)
+
 Axiom v0.5 is a small educational x86-64 operating system written in freestanding C. It
 boots with Limine on BIOS and UEFI, shows a branded splash and module-loading
 screen, discovers system hardware, and opens an interactive graphical console.
