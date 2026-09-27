@@ -21,6 +21,9 @@
 #include "account.h"
 #include "security.h"
 #include "service.h"
+#include "config.h"
+#include "device.h"
+#include "power.h"
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(6);
@@ -72,7 +75,8 @@ static void cmd_help(const char *args) {
     console_write("PROCESSES: PS PROCTEST\n");
     console_write("USERS: ACCOUNTS USERADD USERDEL USERMOD PASSWD ID WHOAMI GROUPS GROUPADD GROUPMOD\n");
     console_write("SECURITY: ELEVATE CAPS SECURITYLOG RECOVERYKEY ENV SETENV LOCK LOGOUT\n");
-    console_write("SERVICES: SERVICES SERVICE SERVICETEST\n");
+    console_write("SERVICES: SERVICES SERVICE SERVICETEST CONFIG SETCONFIG JOURNAL\n");
+    console_write("DEVICES: DEVICES DEVICEEVENTS DEVICETEST RESCAN\n");
     console_write("POWER: REBOOT SHUTDOWN HALT\n");
 }
 
@@ -228,9 +232,10 @@ static void cmd_random(const char *args){(void)args;console_write("ENTROPY SAMPL
 static bool require_cap(uint64_t cap,const char*operation){if(process_current_has_capability(cap,hardware_uptime_ms()))return true;console_write("PERMISSION DENIED: ELEVATE THE REQUIRED CAPABILITY.\n");account_audit("permission-denied",operation);return false;}
 static bool confirmed(const char*args){return streq(args,"--confirm")||streq(args,"confirm");}
 static void cmd_logs(const char *args){(void)args;if(require_cap(CAP_AUDIT,"logs"))log_dump();}
+static void cmd_journal(const char*a){if(require_cap(CAP_AUDIT,"journal"))log_journal_dump(*a?a:0);}
 static void cmd_irqs(const char *args){(void)args;console_write("TIMER IRQ: ");console_write_u64(arch_interrupt_count(32));console_write(" KEYBOARD IRQ: ");console_write_u64(arch_interrupt_count(33));console_putc('\n');}
 static void cmd_smp(const char *args){(void)args;console_write("ONLINE PROCESSORS: ");console_write_u64(smp_online_count());console_write(" OF ");console_write_u64(system_get_info()->logical_threads);console_putc('\n');console_write("LOCAL APIC: ");console_write(arch_apic_active()?"ACTIVE":"FALLBACK");console_write(" IOAPIC: ");console_write(arch_ioapic_present()?"PRESENT":"ABSENT");console_putc('\n');}
-static void cmd_shutdown(const char *args){if(!require_cap(CAP_POWER,"shutdown")||!confirmed(args)){console_write("USAGE: SHUTDOWN --CONFIRM\n");return;}account_audit("shutdown","confirmed");console_write("REQUESTING ACPI SHUTDOWN...\n");if(!acpi_shutdown())console_write("ACPI SHUTDOWN UNAVAILABLE.\n");}
+static void cmd_shutdown(const char *args){if(!require_cap(CAP_POWER,"shutdown")||!confirmed(args)){console_write("USAGE: SHUTDOWN --CONFIRM\n");return;}account_audit("shutdown","confirmed");console_write("COORDINATING CLEAN SHUTDOWN...\n");if(!power_prepare(POWER_ACTION_SHUTDOWN)){console_write("SHUTDOWN REFUSED: FLUSH OR SERVICE FAILURE.\n");return;}console_write("ALL WRITES FLUSHED. REQUESTING ACPI SHUTDOWN...\n");if(!acpi_shutdown()){console_write("ACPI SHUTDOWN UNAVAILABLE; HALTING SAFELY.\n");machine_halt();}}
 static void cmd_pci(const char *args){(void)args;console_write("PCI DEVICES: ");console_write_u64(pci_device_count());console_putc('\n');pci_list_devices(false);}
 static void cmd_disks(const char *args){(void)args;console_write("AHCI CONTROLLERS: ");console_write_u64(storage_ahci_controllers());console_write(" NVME CONTROLLERS: ");console_write_u64(storage_nvme_controllers());console_write(" BLOCK DEVICES: ");console_write_u64(block_device_count());console_putc('\n');for(uint32_t i=0;i<block_device_count();i++){struct block_device*d=block_device_at(i);console_write(d->name);console_write(" ");console_write(d->model);console_write(" SECTORS=");console_write_u64(d->sectors);console_write(d->readonly?" RO\n":" RW\n");}}
 static void fs_error(int e){if(e<0){if(e==VFS_EACCES)account_audit("permission-denied","vfs");console_write("ERROR: ");console_write(vfs_error_string(e));console_putc('\n');}}
@@ -278,19 +283,28 @@ static void cmd_setenv(const char*a){char b[160];size_t n=0;while(a[n]&&n+1<size
 static void cmd_securitylog(const char*a){(void)a;if(!require_cap(CAP_AUDIT,"securitylog"))return;char buffer[257];uint64_t offset=0;long n;while((n=account_read_audit(buffer,offset,256))>0){buffer[n]=0;console_write(buffer);offset+=(uint64_t)n;}if(n<0)console_write("SECURITY LOG UNAVAILABLE\n");}
 static void cmd_recoverykey(const char*a){if(!require_cap(CAP_USERS,"recoverykey")||!streq(a,"rotate --confirm")){console_write("USAGE: RECOVERYKEY ROTATE --CONFIRM\n");return;}char key[33];if(!account_rotate_recovery_key(key,sizeof(key))){console_write("RECOVERY KEY ROTATION FAILED\n");return;}console_write("NEW RECOVERY KEY (STORE OFFLINE): ");console_write(key);console_putc('\n');for(uint32_t i=0;i<sizeof(key);i++)key[i]=0;}
 static void cmd_securitytest(const char*a){(void)a;uint64_t now=hardware_uptime_ms();bool ok=process_grant_current_capability(CAP_TIME,now?now-1:0)&&!process_current_has_capability(CAP_TIME,now+1);console_write(ok?"CAPABILITY EXPIRY AND REVOCATION TEST: PASS\n":"CAPABILITY EXPIRY AND REVOCATION TEST: FAIL\n");log_write(ok?"PASS":"FAIL","SECURITY CAPABILITY EXPIRY TEST");}
-static void cmd_services(const char*a){(void)a;console_write("SERVICE STATE PID RESTARTS LAST-HEARTBEAT\n");for(uint32_t i=0;i<service_count();i++){const struct service_info*s=service_at(i);console_write(s->name);console_putc(' ');console_write(service_state_name(s->state));console_putc(' ');console_write_u64(s->pid);console_putc(' ');console_write_u64(s->restarts);console_putc(' ');console_write_u64(s->last_heartbeat_ms);console_putc('\n');}}
+static void cmd_services(const char*a){(void)a;service_supervise(hardware_uptime_ms());console_write("SERVICE STATE PID RESTARTS LAST-HEARTBEAT\n");for(uint32_t i=0;i<service_count();i++){const struct service_info*s=service_at(i);console_write(s->name);console_putc(' ');console_write(service_state_name(s->state));console_putc(' ');console_write_u64(s->pid);console_putc(' ');console_write_u64(s->restarts);console_putc(' ');console_write_u64(s->last_heartbeat_ms);console_putc('\n');}}
 static void cmd_service(const char*a){if(!require_cap(CAP_SERVICE,"service-control"))return;char b[128];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*action=next_arg(&p),*name=next_arg(&p),*confirmation=next_arg(&p);int e=-1;if(action&&name&&confirmation&&confirmed(confirmation)){if(streq(action,"start"))e=service_start(name);else if(streq(action,"stop"))e=service_stop(name);else if(streq(action,"restart"))e=service_restart(name);}if(e)console_write("SERVICE ACTION FAILED. USAGE: SERVICE START|STOP|RESTART NAME --CONFIRM\n");else{console_write("SERVICE ACTION COMPLETE\n");account_audit("service-control",action);}}
-static void cmd_servicetest(const char*a){(void)a;bool ok=service_count()>=2;uint64_t now=hardware_uptime_ms();for(uint32_t i=0;i<service_count();i++){const struct service_info*s=service_at(i);const struct account_info*u=account_named(s->account);bool process_found=false;for(uint32_t p=0;p<process_count();p++){struct process_info info;if(process_info_at(p,&info)&&info.pid==s->pid&&u&&info.real_uid==u->uid&&info.effective_uid==u->uid)process_found=true;}if(s->state!=SERVICE_RUNNING||!s->last_heartbeat_ms||now-s->last_heartbeat_ms>2000||!process_found)ok=false;}console_write(ok?"USER-SPACE SERVICE SUPERVISION TEST: PASS\n":"USER-SPACE SERVICE SUPERVISION TEST: FAIL\n");log_write(ok?"PASS":"FAIL","USER-SPACE SERVICE SUPERVISION TEST");}
+static void cmd_servicetest(const char*a){(void)a;service_supervise(hardware_uptime_ms());bool ok=service_count()>=2;uint64_t now=hardware_uptime_ms();for(uint32_t i=0;i<service_count();i++){const struct service_info*s=service_at(i);const struct account_info*u=account_named(s->account);bool process_found=false;for(uint32_t p=0;p<process_count();p++){struct process_info info;if(process_info_at(p,&info)&&info.pid==s->pid&&u&&info.real_uid==u->uid&&info.effective_uid==u->uid)process_found=true;}if(s->state!=SERVICE_RUNNING||!s->last_heartbeat_ms||now-s->last_heartbeat_ms>s->heartbeat_timeout_ms||!s->restart_limit||!process_found)ok=false;}console_write(ok?"USER-SPACE SERVICE SUPERVISION TEST: PASS\n":"USER-SPACE SERVICE SUPERVISION TEST: FAIL\n");log_write(ok?"PASS":"FAIL","USER-SPACE SERVICE SUPERVISION TEST");}
+static void print_config(const struct config_document*d){if(!d){console_write("CONFIGURATION UNAVAILABLE\n");return;}console_write("SCHEMA=");console_write_u64(d->schema);console_putc('\n');for(uint32_t i=0;i<d->count;i++){if(streq(d->entries[i].key,"schema"))continue;console_write(d->entries[i].key);console_putc('=');console_write(d->entries[i].value);console_putc('\n');}}
+static void cmd_config(const char*a){char b[96];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*scope=next_arg(&p),*key=next_arg(&p);const struct config_document*d=!scope||streq(scope,"system")?config_system():streq(scope,"user")?config_user():0;if(!d){console_write("USAGE: CONFIG SYSTEM|USER [KEY]\n");return;}if(key){const char*v=config_get(d,key);console_write(v?v:"UNKNOWN SETTING");console_putc('\n');}else print_config(d);}
+static void cmd_setconfig(const char*a){char b[224];size_t n=0;while(a[n]&&n+1<sizeof(b)){b[n]=a[n];n++;}b[n]=0;char*p=b,*scope=next_arg(&p),*key=next_arg(&p),*value=next_arg(&p),*confirmation=next_arg(&p);bool ok=false;if(scope&&streq(scope,"user")&&key&&value&&!confirmation)ok=config_user_set(key,value);else if(scope&&streq(scope,"system")&&key&&value&&confirmation&&confirmed(confirmation)&&require_cap(CAP_SERVICE,"system-config"))ok=config_system_set(key,value);if(!ok){console_write("SETCONFIG FAILED. USE SETCONFIG USER KEY VALUE, OR SETCONFIG SYSTEM KEY VALUE --CONFIRM.\n");return;}account_audit("configuration-change",scope);console_write("CONFIGURATION SAVED AND APPLIED.\n");}
+static void cmd_configtest(const char*a){(void)a;if(!require_cap(CAP_SERVICE,"configtest"))return;bool ok=config_self_test();console_write(ok?"CONFIG SCHEMA MIGRATION AND RECOVERY TEST: PASS\n":"CONFIG SCHEMA MIGRATION AND RECOVERY TEST: FAIL\n");log_write(ok?"PASS":"FAIL","CONFIG SCHEMA MIGRATION AND RECOVERY TEST");}
+static void cmd_settings(const char*a){(void)a;static const char*keys[]={"hostname","locale","timezone","keyboard","display.scale","power.policy"};const struct config_document*d=config_system();for(uint32_t i=0;i<sizeof(keys)/sizeof(keys[0]);i++){console_write(keys[i]);console_putc('=');console_write(config_get(d,keys[i]));console_putc('\n');}}
+static void cmd_devices(const char*a){(void)a;console_write("STABLE-NAME KIND MODE OWNER PATH\n");for(uint32_t i=0;i<device_manager_count();i++){const struct managed_device*d=device_manager_at(i);console_write(d->stable_name);console_putc(' ');console_write(d->kind);console_putc(' ');console_write_u64(d->mode);console_write(" ");console_write_u64(d->uid);console_putc(':');console_write_u64(d->gid);console_putc(' ');console_write(d->path);console_putc('\n');}}
+static void cmd_deviceevents(const char*a){(void)a;if(!require_cap(CAP_DEVICE,"deviceevents"))return;console_write("SEQ TIME EVENT DEVICE\n");for(uint32_t i=0;i<device_event_count();i++){const struct device_event*e=device_event_at(i);console_write_u64(e->sequence);console_putc(' ');console_write_u64(e->time_ms);console_putc(' ');console_write(device_event_type_name(e->type));console_putc(' ');console_write(e->stable_name);console_putc('\n');}}
+static void cmd_devicetest(const char*a){(void)a;if(!require_cap(CAP_DEVICE,"devicetest"))return;bool ok=device_manager_scan()&&device_manager_self_test();console_write(ok?"DEVICE DISCOVERY PERMISSIONS HOTPLUG TEST: PASS\n":"DEVICE DISCOVERY PERMISSIONS HOTPLUG TEST: FAIL\n");log_write(ok?"PASS":"FAIL","DEVICE DISCOVERY PERMISSIONS HOTPLUG TEST");}
+static void cmd_powerstatus(const char*a){(void)a;const struct power_status*s=power_get_status();console_write("POWER STATE: ");console_write(power_state_name(s->state));console_write(" ACTION=");console_write_u64(s->action);console_write(" QUIESCED=");console_write_u64(s->quiesced_processes);console_write(" SAVED=");console_write_u64(s->accounts_saved);console_write(" SERVICES=");console_write_u64(s->services_stopped);console_write(" FS=");console_write_u64(s->filesystem_checked);console_write(" FLUSHED=");console_write_u64(s->caches_flushed);console_putc('\n');}
 static void cmd_login(const char*a){(void)a;console_write("USE LOCK OR LOGOUT, THEN SIGN IN ON THE GRAPHICAL LOGIN SCREEN.\n");}
 static void cmd_logout(const char*a){(void)a;console_write("TYPE LOGOUT DIRECTLY IN THE USER SHELL TO END THIS SESSION.\n");}
 static void cmd_lock(const char*a){(void)a;console_write("TYPE LOCK DIRECTLY IN THE USER SHELL TO LOCK THIS SESSION.\n");}
 static void cmd_proctest(const char*a){(void)a;bool ok=process_runtime_ready();console_write(ok?"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: PASS\n":"PHASE 3 RING3 PROCESS AND SYSCALL TESTS: FAIL\n");log_write(ok?"PASS":"FAIL","PHASE 3 RING3 PROCESS AND SYSCALL TESTS");}
-static void cmd_rescan(const char*a){(void)a;if(!require_cap(CAP_DEVICE,"rescan"))return;pci_init();storage_probe_hardware();console_write("PCI AND STORAGE RESCAN COMPLETE.\n");}
-static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}if(keyboard_set_layout(args))console_write("KEYBOARD LAYOUT CHANGED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
-static void cmd_run(const char *args){char script[128];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
-static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;accounttest;accounts;ps;packages;services;servicetest;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
+static void cmd_rescan(const char*a){(void)a;if(!require_cap(CAP_DEVICE,"rescan"))return;pci_init();storage_probe_hardware();bool ok=device_manager_scan();account_audit("device-rescan",ok?"complete":"failed");console_write(ok?"PCI STORAGE AND DEVICE RESCAN COMPLETE.\n":"DEVICE RESCAN FAILED.\n");}
+static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}bool ok=config_user()?config_user_set("keyboard",args):keyboard_set_layout(args);if(ok)console_write("KEYBOARD LAYOUT CHANGED AND SAVED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
+static void cmd_run(const char *args){char script[256];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
+static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;accounttest;configtest;devicetest;accounts;ps;packages;services;servicetest;settings;powerstatus;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
 
-static void cmd_reboot(const char *args) { if(!require_cap(CAP_POWER,"reboot")||!confirmed(args)){console_write("USAGE: REBOOT --CONFIRM\n");return;}account_audit("reboot","confirmed");LOG_INFO("reboot requested");console_write("REBOOTING...\n");machine_reboot(); }
+static void cmd_reboot(const char *args) { if(!require_cap(CAP_POWER,"reboot")||!confirmed(args)){console_write("USAGE: REBOOT --CONFIRM\n");return;}account_audit("reboot","confirmed");LOG_INFO("reboot requested");console_write("COORDINATING CLEAN REBOOT...\n");if(!power_prepare(POWER_ACTION_REBOOT)){console_write("REBOOT REFUSED: FLUSH OR SERVICE FAILURE.\n");return;}console_write("ALL WRITES FLUSHED. REBOOTING...\n");machine_reboot(); }
 static void cmd_halt(const char *args) { if(!require_cap(CAP_POWER,"halt")||!confirmed(args)){console_write("USAGE: HALT --CONFIRM\n");return;}account_audit("halt","confirmed");console_write("SYSTEM HALTED.\n");machine_halt(); }
 
 struct command { const char *name; void (*handler)(const char *); };
@@ -300,11 +314,11 @@ static const struct command commands[] = {
     {"modules",cmd_modules},{"memtest",cmd_memtest},{"cputest",cmd_cputest},
     {"allocstat",cmd_allocstat},{"heaptest",cmd_heaptest},{"fault",cmd_fault},
     {"acpi",cmd_acpi},{"time",cmd_time},{"uptime",cmd_uptime},{"random",cmd_random},
-    {"logs",cmd_logs},{"irqs",cmd_irqs},{"smp",cmd_smp},{"shutdown",cmd_shutdown},
+    {"logs",cmd_logs},{"journal",cmd_journal},{"irqs",cmd_irqs},{"smp",cmd_smp},{"shutdown",cmd_shutdown},
     {"pci",cmd_pci},{"disks",cmd_disks},{"layout",cmd_layout},{"run",cmd_run},{"script",cmd_script},
     {"ls",cmd_ls},{"cd",cmd_cd},{"pwd",cmd_pwd},{"cat",cmd_cat},{"touch",cmd_touch},{"mkdir",cmd_mkdir},{"cp",cmd_cp},{"mv",cmd_mv},{"rm",cmd_rm},{"ln",cmd_ln},{"chmod",cmd_chmod},{"chown",cmd_chown},{"mount",cmd_mount},{"unmount",cmd_unmount},{"df",cmd_df},{"du",cmd_du},{"fsck",cmd_fsck},{"mkfs",cmd_mkfs},{"fatls",cmd_fatls},{"fatcat",cmd_fatcat},{"storagetest",cmd_storagetest},{"hwstoragetest",cmd_hwstoragetest},{"rescan",cmd_rescan},{"partitions",cmd_partitions},
     {"ps",cmd_ps},{"proctest",cmd_proctest},{"packages",cmd_packages},
-    {"accounts",cmd_accounts},{"useradd",cmd_useradd},{"userdel",cmd_userdel},{"usermod",cmd_usermod},{"passwd",cmd_passwd},{"login",cmd_login},{"logout",cmd_logout},{"lock",cmd_lock},{"id",cmd_id},{"whoami",cmd_whoami},{"groups",cmd_groups},{"groupadd",cmd_groupadd},{"groupmod",cmd_groupmod},{"env",cmd_env},{"setenv",cmd_setenv},{"elevate",cmd_elevate},{"caps",cmd_caps},{"securitylog",cmd_securitylog},{"recoverykey",cmd_recoverykey},{"securitytest",cmd_securitytest},{"accounttest",cmd_accounttest},{"services",cmd_services},{"service",cmd_service},{"servicetest",cmd_servicetest},
+    {"accounts",cmd_accounts},{"useradd",cmd_useradd},{"userdel",cmd_userdel},{"usermod",cmd_usermod},{"passwd",cmd_passwd},{"login",cmd_login},{"logout",cmd_logout},{"lock",cmd_lock},{"id",cmd_id},{"whoami",cmd_whoami},{"groups",cmd_groups},{"groupadd",cmd_groupadd},{"groupmod",cmd_groupmod},{"env",cmd_env},{"setenv",cmd_setenv},{"elevate",cmd_elevate},{"caps",cmd_caps},{"securitylog",cmd_securitylog},{"recoverykey",cmd_recoverykey},{"securitytest",cmd_securitytest},{"accounttest",cmd_accounttest},{"services",cmd_services},{"service",cmd_service},{"servicetest",cmd_servicetest},{"config",cmd_config},{"setconfig",cmd_setconfig},{"configtest",cmd_configtest},{"settings",cmd_settings},{"devices",cmd_devices},{"deviceevents",cmd_deviceevents},{"devicetest",cmd_devicetest},{"powerstatus",cmd_powerstatus},
     {"memmap",cmd_memmap},{"fbinfo",cmd_fbinfo},{"reboot",cmd_reboot},{"halt",cmd_halt}
 };
 
@@ -373,14 +387,15 @@ static const char *load_items[] = {
     "Process and syscall manager", "Command console",
     "Interrupt and privilege gates", "Ring 3 syscall runtime",
     "Preemptive process scheduler", "Identity and authentication",
-    "User-space service manager"
+    "Configuration schemas", "Persistent system journal", "Device manager",
+    "User-space service manager", "Power coordinator"
 };
 #define LOAD_ITEM_COUNT (sizeof(load_items)/sizeof(load_items[0]))
 #define LOAD_RED 0xff5f6d
 #define LOAD_YELLOW 0xffcc55
 #define LOAD_GREEN 0x63d391
 
-static uint64_t load_y(unsigned step){return 125u+(uint64_t)step*23u;}
+static uint64_t load_y(unsigned step){return 118u+(uint64_t)step*18u;}
 static void load_status(unsigned step,const char *status,uint32_t colour){
     uint64_t x=fb_width()-330u,y=load_y(step);
     fb_rect(x,y,230,18,0x101318);
@@ -389,7 +404,7 @@ static void load_status(unsigned step,const char *status,uint32_t colour){
 static void load_begin(unsigned step){load_status(step,"[ TESTING ]",LOAD_YELLOW);pit_wait_ms(350);}
 static void load_finish(unsigned step,bool passed){
     load_status(step,passed?"[ OK ]":"[ FAILED ]",passed?LOAD_GREEN:LOAD_RED);
-    uint64_t x=120,y=535,w=fb_width()-240;
+    uint64_t x=120,y=550,w=fb_width()-240;
     fb_rect(x,y,w,14,0x252b34);fb_rect(x,y,w*(step+1)/LOAD_ITEM_COUNT,14,passed?0x4f8fe8:LOAD_RED);
     pit_wait_ms(200);
 }
@@ -399,7 +414,7 @@ static void loading_screen(void) {
     fb_text(120,55,"AXIOM STARTUP",0xf4f7fa,4);
     fb_text(120,100,"Testing kernel modules and system hardware",0x8995a3,2);
     for(unsigned i=0;i<LOAD_ITEM_COUNT;i++){fb_text(120,load_y(i),load_items[i],0xd7dee7,2);load_status(i,"[ NOT TESTED ]",LOAD_RED);}
-    fb_rect(120,535,fb_width()-240,14,0x252b34);pit_wait_ms(800);
+    fb_rect(120,550,fb_width()-240,14,0x252b34);pit_wait_ms(800);
     bool failed=false,passed;
     load_begin(0);passed=LIMINE_BASE_REVISION_SUPPORTED(base_revision);load_finish(0,passed);failed|=!passed;
     load_begin(1);passed=fb_info()!=0&&fb_width()>0&&fb_height()>0;load_finish(1,passed);failed|=!passed;
@@ -432,8 +447,12 @@ static void loading_screen(void) {
     load_begin(15);passed=process_user_mode_self_test();load_finish(15,passed);failed|=!passed;
     load_begin(16);passed=passed&&process_scheduler_self_test();load_finish(16,passed);failed|=!passed;
     load_begin(17);account_init();passed=account_prepare_recovery()&&account_create_service("system-logger",0)==0&&account_create_service("device-manager",0)==0&&account_recovery_self_test()&&account_self_test()&&account_database_recovery_self_test();if(passed)LOG_INFO("random recovery credential and database fallback verified");load_finish(17,passed);failed|=!passed;
-    load_begin(18);service_init();passed=service_self_test();load_finish(18,passed);failed|=!passed;
-    fb_text(120,580,failed?"[ FAILED ] SYSTEM IS NOT SAFE TO BOOT":"[ OK ] ALL REQUIRED TESTS PASSED",failed?LOAD_RED:LOAD_GREEN,2);
+    load_begin(18);passed=config_system_init()&&config_self_test();load_finish(18,passed);failed|=!passed;
+    load_begin(19);passed=log_enable_persistence()&&log_self_test();load_finish(19,passed);failed|=!passed;
+    load_begin(20);passed=device_manager_init()&&device_manager_self_test();load_finish(20,passed);failed|=!passed;
+    load_begin(21);service_init();passed=service_self_test();load_finish(21,passed);failed|=!passed;
+    load_begin(22);power_init();passed=power_self_test();load_finish(22,passed);failed|=!passed;
+    fb_text(120,585,failed?"[ FAILED ] SYSTEM IS NOT SAFE TO BOOT":"[ OK ] ALL REQUIRED TESTS PASSED",failed?LOAD_RED:LOAD_GREEN,2);
     pit_wait_ms(failed?3000:900);
     if(failed)machine_halt();
 }
@@ -441,7 +460,7 @@ static void loading_screen(void) {
 static void setup_field(uint64_t y,const char*label,char*out,size_t capacity,bool secret){size_t length=0;out[0]=0;fb_text(250,y,label,0xc8d1dc,2);fb_rect(250,y+28,524,42,0x252b34);fb_rect(254,y+32,516,34,0x161b22);for(;;){struct key_event event=keyboard_read_event();if(!event.pressed)continue;char c=event.character;if(c=='\n'){if(length)break;continue;}if(c=='\b'){if(length)length--;}else if(c>=32&&c<127&&length+1<capacity)out[length++]=c;out[length]=0;fb_rect(254,y+32,516,34,0x161b22);char shown[73];for(size_t i=0;i<length;i++)shown[i]=secret?'*':out[i];shown[length]=0;fb_text(265,y+39,shown,0xf4f7fa,2);}}
 static bool same_text(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return *a==*b;}
 static void first_boot_setup(void){if(account_has_admin())return;char name[32],password[73],confirm[73];for(;;){fb_clear(0x101318);fb_text(250,70,"WELCOME TO AXIOM",0xf4f7fa,4);fb_text(250,115,"Create the first administrator account",0x8995a3,2);setup_field(165,"USERNAME",name,sizeof(name),false);LOG_INFO("setup username accepted");setup_field(265,"PASSWORD (8-72 CHARACTERS)",password,sizeof(password),true);LOG_INFO("setup password accepted");setup_field(365,"CONFIRM PASSWORD",confirm,sizeof(confirm),true);LOG_INFO("setup confirmation accepted");if(!same_text(password,confirm)){LOG_WARN("setup password confirmation mismatch");fb_text(250,475,"PASSWORDS DO NOT MATCH - TRY AGAIN",LOAD_RED,2);pit_wait_ms(1200);continue;}uint32_t uid;if(account_create(name,password,ACCOUNT_ADMIN,&uid)||!account_save()||!account_begin_session(uid)){LOG_ERROR("setup account creation failed");fb_text(250,475,"ACCOUNT COULD NOT BE CREATED - TRY AGAIN",LOAD_RED,2);pit_wait_ms(1200);continue;}fb_text(250,475,"[ OK ] ADMINISTRATOR CREATED",LOAD_GREEN,2);LOG_INFO("first administrator account created");pit_wait_ms(900);return;}}
-static void graphical_login(void){char name[32],password[73];account_end_session();for(;;){fb_clear(0x101318);fb_text(250,90,"AXIOM LOGIN",0xf4f7fa,5);fb_text(250,145,"Your system. Your rules.",0x8995a3,2);setup_field(210,"USERNAME",name,sizeof(name),false);setup_field(315,"PASSWORD",password,sizeof(password),true);int uid=account_authenticate(name,password,hardware_uptime_ms());for(size_t i=0;i<sizeof(password);i++)password[i]=0;if(uid>=0&&account_begin_session((uint32_t)uid)){fb_text(250,430,"[ OK ] SIGNED IN",LOAD_GREEN,2);LOG_INFO("graphical login successful");pit_wait_ms(700);return;}fb_text(250,430,"LOGIN FAILED - CHECK CREDENTIALS",LOAD_RED,2);LOG_WARN("graphical login rejected");pit_wait_ms(1000);}}
+static void graphical_login(void){char name[32],password[73];config_user_end();account_end_session();for(;;){fb_clear(0x101318);fb_text(250,90,"AXIOM LOGIN",0xf4f7fa,5);fb_text(250,145,"Your system. Your rules.",0x8995a3,2);setup_field(210,"USERNAME",name,sizeof(name),false);setup_field(315,"PASSWORD",password,sizeof(password),true);int uid=account_authenticate(name,password,hardware_uptime_ms());for(size_t i=0;i<sizeof(password);i++)password[i]=0;if(uid>=0&&account_begin_session((uint32_t)uid)){const struct account_info*u=account_current();if(u&&config_user_init(u->name,u->uid,u->gid)){fb_text(250,430,"[ OK ] SIGNED IN",LOAD_GREEN,2);LOG_INFO("graphical login successful");pit_wait_ms(700);return;}account_end_session();LOG_ERROR("per-user configuration could not be loaded");}fb_text(250,430,"LOGIN FAILED - CHECK CREDENTIALS",LOAD_RED,2);LOG_WARN("graphical login rejected");pit_wait_ms(1000);}}
 
 static void show_initial_recovery_key(void){char key[33];if(!account_take_recovery_key(key,sizeof(key)))return;fb_clear(0x101318);fb_text(180,90,"SAVE YOUR AXIOM RECOVERY KEY",0xf4f7fa,3);fb_text(180,150,"This unique key is shown only once.",0x8995a3,2);fb_text(180,215,key,LOAD_YELLOW,2);fb_text(180,275,"Store it offline. It can sign in as recovery",0xc8d1dc,2);fb_text(180,305,"when every administrator account is locked.",0xc8d1dc,2);fb_text(180,385,"PRESS ENTER AFTER SAVING THE KEY",LOAD_GREEN,2);for(;;){struct key_event event=keyboard_read_event();if(event.pressed&&event.character=='\n')break;}for(uint32_t i=0;i<sizeof(key);i++)key[i]=0;LOG_INFO("one-time recovery key acknowledged");}
 static bool concurrent_login_probe(uint64_t processor_id){(void)processor_id;return account_authenticate("parallel-login","concurrent-pass",hardware_uptime_ms()+100000)>=0;}
@@ -470,6 +489,7 @@ void kmain(void) {
         LOG_INFO("launching user-space init and shell");
         LOG_INFO("session processes inherit authenticated credentials");
         int status=process_launch_init();
+        config_user_end();
         account_end_session();
         if(status<0){LOG_ERROR("user-space init failed; entering kernel recovery console");console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");shell();}
         LOG_INFO(status==65?"session locked; returning to login":"session logged out; returning to login");

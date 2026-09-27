@@ -106,10 +106,18 @@ and scrolling. Available commands are:
 - `allocstat` and `heaptest` — inspect and test kernel memory management
 - `time`, `uptime`, and `random` — show RTC, monotonic time, and entropy
 - `logs` — display the in-memory serial log history
-- `layout us|dvorak` — select the keyboard layout
+- `journal [LEVEL]` — read the rotated persistent journal, optionally filtered by level
+- `services`, `service`, and `servicetest` — inspect, control, and verify supervised user-space services
+- `config system|user [KEY]` — inspect versioned system or current-user configuration
+- `setconfig user KEY VALUE` — persist a validated per-user setting
+- `setconfig system KEY VALUE --confirm` — persist a validated system setting after service-capability elevation
+- `settings` — show hostname, locale, timezone, keyboard, display-scale, and power-policy settings
+- `devices`, `deviceevents`, and `devicetest` — inspect stable device names, hotplug history, permissions, and discovery tests
+- `layout us|dvorak` — select and persist the current user's keyboard layout
+- `powerstatus` — inspect shutdown/reboot coordinator state
 - `run CMD;CMD` and `script demo` — execute command scripts
-- `shutdown` — request ACPI soft power-off
-- `reboot` — request a reset through the PS/2 controller
+- `shutdown` — save state, stop services, check filesystems, flush storage, and request ACPI soft power-off
+- `reboot` — perform the same coordinated flush before resetting through the PS/2 controller
 - `halt` — disable interrupts and halt the CPU
 
 The physical-core count is derived from CPUID topology and the logical-thread
@@ -133,6 +141,12 @@ doing that safely requires the future physical memory manager.
 - `src/account.c` and `src/security.h` provide accounts, groups, capabilities,
   recovery-key authentication, and protected audit records. See
   [docs/security.md](docs/security.md) for the threat model.
+- `src/config.c` provides schema-versioned system and per-user settings, safe
+  defaults, atomic updates, migration, and backup recovery.
+- `src/service.c`, `src/device.c`, and `src/log.c` provide service supervision,
+  stable device discovery/hotplug events, and a rotated persistent journal.
+- `src/power.c` coordinates account saves, process quiescing, service stops,
+  filesystem validation, and block-cache flushes before power transitions.
 - `src/elf.c` validates and maps static x86-64 ELF programs from the VFS.
 - `src/ipc.c` provides bounded pipes, process events, and shared memory.
 - `src/package.c` validates ABI-compatible package manifests.
@@ -180,6 +194,8 @@ screenshots and audit traces remain easy to inspect:
 ```sh
 ./tests/session.sh axiom.iso build/session
 ./tests/security.sh axiom.iso build/security
+./tests/services.sh axiom.iso build/services
+./tests/phase3b-half.sh axiom.iso build/phase3b-half
 ```
 
 Real emulated AHCI/NVMe devices are checked separately:

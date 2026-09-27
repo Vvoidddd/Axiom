@@ -10,8 +10,8 @@ static const struct embedded_file image[]={
  ,{"/system/packages/init.pkg","name=init\nversion=0.1.0\nabi=1\ntype=system\nexecutable=/system/bin/init\n"}
  ,{"/system/packages/shell.pkg","name=shell\nversion=0.1.0\nabi=1\ntype=system\nexecutable=/system/bin/shell\n"}
  ,{"/system/packages/hello.pkg","name=hello\nversion=0.1.0\nabi=1\ntype=app\nexecutable=/apps/hello\n"}
- ,{"/system/services/system-logger.svc","name=system-logger\naccount=system-logger\nexecutable=/system/bin/loggerd\nrestart=always\n"}
- ,{"/system/services/device-manager.svc","name=device-manager\naccount=device-manager\nexecutable=/system/bin/deviced\nrestart=always\n"}
+ ,{"/system/services/system-logger.svc","schema=1\nname=system-logger\naccount=system-logger\nexecutable=/system/bin/loggerd\nrestart=always\nrestart_limit=3\nheartbeat_ms=2000\n"}
+ ,{"/system/services/device-manager.svc","schema=1\nname=device-manager\naccount=device-manager\nexecutable=/system/bin/deviced\nrestart=always\nrestart_limit=3\nheartbeat_ms=2000\n"}
 };
 extern const unsigned char user_init_start[],user_init_end[],user_shell_start[],user_shell_end[],user_hello_start[],user_hello_end[],user_loggerd_start[],user_loggerd_end[],user_deviced_start[],user_deviced_end[];
 static bool install_binary(const char*path,const unsigned char*start,const unsigned char*end){int fd=vfs_open(path,VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0)return false;size_t size=(size_t)(end-start);bool ok=vfs_write(fd,start,size)==(long)size;ok=vfs_close(fd)==0&&ok;return ok&&vfs_chmod(path,0755)==0;}

@@ -6,10 +6,12 @@
 
 #define SERVICE_MAX 8
 enum service_state {SERVICE_STOPPED,SERVICE_STARTING,SERVICE_RUNNING,SERVICE_FAILED};
-struct service_info {char name[32],executable[96],account[32];enum service_state state;uint32_t pid,restarts;uint64_t last_heartbeat_ms;int last_status;bool enabled;};
+struct service_info {char name[32],executable[96],account[32];enum service_state state;uint32_t pid,restarts,restart_limit,heartbeat_timeout_ms;uint64_t started_ms,last_heartbeat_ms;int last_status;bool enabled,restart_always,manual_stop;};
 
-void service_init(void);
+bool service_init(void);
 bool service_ensure_started(void);
+bool service_supervise(uint64_t now_ms);
+bool service_stop_all(void);
 int service_start(const char *name);
 int service_stop(const char *name);
 int service_restart(const char *name);
