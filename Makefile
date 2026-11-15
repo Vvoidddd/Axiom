@@ -106,6 +106,11 @@ run-uefi: $(ISO)
 test: $(ISO)
 	./tests/smoke.sh $(ISO)
 
+.PHONY: test-vfs
+test-vfs: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/vfs-immutable.c src/vfs.c -o $(BUILD)/vfs-immutable-test
+	$(BUILD)/vfs-immutable-test
+
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/user $(KERNEL) $(ISO) $(ISO_ROOT)
 

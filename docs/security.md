@@ -35,6 +35,13 @@ deletion rules, set-group-ID directory inheritance, set-user-ID/set-group-ID
 execution, ownership changes, and a separate device capability gate. `/tmp` is
 sticky; home directories and account data are mode `0700`/`0600`.
 
+Boot seals `/boot`, `/system`, and `/apps` against VFS mutation, including by
+identity 0 and elevated capabilities. There is no unseal syscall. Account data
+and system settings are mutable under `/var/config` (0700); recovery's home is
+`/users/recovery`. Sealing is a runtime VFS boundary, not secure boot or an
+on-disk integrity check. The current boot reconstructs its RAM-backed tree;
+existing persistent installations and migration are not implemented.
+
 Security events are appended to `/var/log/security.log`, which is readable only
 through the `audit` capability. Login success/failure/throttling, account and
 group changes, elevation, permission denials, recovery-key rotation, and power

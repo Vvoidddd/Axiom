@@ -23,6 +23,16 @@ management, pipes, events, and shared memory. A compiled user-space `init`
 starts the primary ring-3 shell and a packaged sample application. The kernel
 console is retained only as a recovery fallback.
 
+The shipped `/boot`, `/system`, and `/apps` trees are sealed read-only after
+initramfs loading. This protection covers nested files, aliases, metadata,
+rename/delete, and already-open descriptors; even recovery identity 0 cannot
+unseal them through the VFS. System settings and account databases live in
+`/var/config` (0700), logs in `/var/log`, and user/application data in private
+`/users/<name>` homes, including `/users/recovery`. `/tmp` remains writable.
+These are RAM-backed runtime trees: this change does not add persistent
+installation, disk migration, or signed updates. Updating the shipped image
+currently requires rebuilding and rebooting.
+
 ## Build on Windows with Arch WSL
 
 Install the build and emulator dependencies inside Arch WSL:
@@ -35,7 +45,7 @@ From PowerShell, enter WSL and change to the project directory:
 
 ```powershell
 wsl -d Arch
-cd /mnt/c/Users/tolik/OneDrive/Desktop/Axiom
+cd /mnt/c/Users/tolik/OneDrive/Desktop/Code/Axiom
 ```
 
 Build the kernel or hybrid BIOS/UEFI ISO:
@@ -122,8 +132,8 @@ and scrolling. Available commands are:
 
 The physical-core count is derived from CPUID topology and the logical-thread
 count reported by Limine. On unusual multi-socket or virtualized systems it is
-an estimate. `memtest` intentionally does not overwrite arbitrary free RAM;
-doing that safely requires the future physical memory manager.
+an estimate. `memtest` tests the reserved kernel buffer and pages temporarily
+allocated from the physical memory manager, then returns those pages.
 
 ## Project layout
 
@@ -173,6 +183,16 @@ make distclean  # also downloaded Limine files
 ```
 
 ## Automated kernel tests
+
+Run the host VFS regression check with address and undefined-behavior sanitizers:
+
+```sh
+make test-vfs
+```
+
+It checks immutable trees, read-only mounts, aliases, metadata, open descriptors,
+recursive deletion, rename cycles, and writable configuration/user data. Boot
+also checks the actual sealed initramfs before launching user programs.
 
 The smoke suite boots QEMU through BIOS and UEFI and validates command scripts,
 heap allocation/free, four-processor startup, reboot, deliberate exception

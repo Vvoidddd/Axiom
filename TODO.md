@@ -79,6 +79,13 @@ tests on both BIOS and UEFI.
 - [x] Add a random per-install recovery key, one-time display, verifier-only storage, and rotation.
 - [x] Test escalation denial, malformed database fallback, disabled users, admin revocation, expiry, and concurrent logins.
 - [x] Document the administrator threat model and all kernel/system/admin/service/user privilege boundaries.
+- [x] Add a service manager that starts, stops, restarts, supervises, and logs user-space services.
+- [x] Define declarative system and per-user configuration formats with safe defaults and schema migration.
+- [x] Add a device manager for discovery, permissions, hotplug events, and stable device names.
+- [x] Add a system logger with rotation, persistent journals, filtering, and administrator-only security records.
+- [x] Implement locale, timezone, hostname, keyboard, power, and display configuration services.
+- [x] Add clean shutdown and reboot coordination so applications flush files before power-off.
+- [x] Separate immutable system files from mutable configuration, application data, logs, and user files.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 
@@ -122,14 +129,7 @@ runtime, serial-log, and framebuffer-screenshot checks pass.
 
 ## Phase 3B: Core System Services
 
-- [x] Add a service manager that starts, stops, restarts, supervises, and logs user-space services.
-- [x] Define declarative system and per-user configuration formats with safe defaults and schema migration.
-- [x] Add a device manager for discovery, permissions, hotplug events, and stable device names.
-- [x] Add a system logger with rotation, persistent journals, filtering, and administrator-only security records.
-- [x] Implement locale, timezone, hostname, keyboard, power, and display configuration services.
-- [x] Add clean shutdown and reboot coordination so applications flush files before power-off.
 - [ ] Add software installation, removal, dependency resolution, signed updates, rollback, and an offline recovery environment.
-- [ ] Separate immutable system files from mutable configuration, application data, logs, and user files.
 - [ ] Add backup and restore tools for user homes, account data, configuration, and filesystem metadata.
 - [ ] Provide safe mode, single-user recovery mode, emergency shell, and booting a previous known-good system version.
 - [ ] Define stable kernel, syscall, driver, service, package, and application compatibility policies.
@@ -139,7 +139,16 @@ Progress log (2026-09-27): the first half is implemented and verified in BIOS
 and UEFI QEMU boots. The validation covers fixed-position startup checks,
 configuration migration/recovery, journal rotation, synthetic device hotplug,
 stable device permissions, supervised service lifecycle, per-user settings, and
-coordinated reboot flushing. Phase 3B remains open until its final six items pass.
+coordinated reboot flushing. Completed items are listed at the top of this file;
+Phase 3B remains open while the tasks above are unfinished.
+
+Progress log (2026-11-14): seal the shipped `/boot`, `/system`, and `/apps`
+trees after loading; keep settings/accounts in `/var/config`, logs in `/var/log`,
+and application/user data in private homes. Root and elevated capabilities cannot
+unseal the image. Host sanitizer tests cover aliases, open descriptors, metadata,
+recursive deletion, and read-only mount inheritance. BIOS/UEFI validation covers
+the sealed image, ring-3 probes, account setup/login, settings, and service/power
+flows. This is a RAM-backed runtime split, not a persistent installer or updater.
 
 ## Phase 4: Input, Graphics, and Desktop
 
@@ -184,6 +193,7 @@ coordinated reboot flushing. Phase 3B remains open until its final six items pas
 
 ## Current Next Milestone
 
-Phase 3B is half complete. The next milestone is its software/package lifecycle,
-immutable/mutable system split, backup/restore, recovery modes, compatibility
-policy, and full blank-disk/upgrade/failure installation test matrix.
+Phase 3B now has seven of twelve items complete. Next are software/package
+lifecycle, backup/restore, recovery modes, compatibility policy, and the full
+blank-disk/upgrade/failure installation test matrix. Desktop graphics remain
+Phase 4 work.

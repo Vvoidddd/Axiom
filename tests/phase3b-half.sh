@@ -86,6 +86,7 @@ run_case() {
         -monitor stdio -no-reboot >/dev/null 2>&1 || true
 
     grep -q '\[INFO\] persistent system journal online' "$log"
+    grep -q '\[PASS\] IMMUTABLE SYSTEM IMAGE TEST' "$log"
     grep -q '\[INFO\] stable device namespace and hotplug event queue online' "$log"
     grep -q '\[PASS\] CONFIG SCHEMA MIGRATION AND RECOVERY TEST' "$log"
     grep -q '\[PASS\] DEVICE DISCOVERY PERMISSIONS HOTPLUG TEST' "$log"

@@ -11,7 +11,7 @@ static struct config_document system_config, user_config;
 static char user_path[160];
 static uint32_t user_uid, user_gid;
 static bool user_loaded;
-static const char *system_path = "/system/config/system.conf";
+static const char *system_path = "/var/config/system.conf";
 
 static size_t length(const char *s){size_t n=0;while(s&&s[n])n++;return n;}
 static bool equal(const char*a,const char*b){if(!a||!b)return false;while(*a&&*a==*b){a++;b++;}return!*a&&!*b;}
@@ -41,7 +41,7 @@ static bool system_valid(const char*k,const char*v){if(equal(k,"hostname"))retur
 static bool user_valid(const char*k,const char*v){if(equal(k,"locale")||equal(k,"timezone"))return simple(v,true);if(equal(k,"keyboard"))return one_of(v,"inherit","us","dvorak");if(equal(k,"display.scale"))return one_of(v,"inherit","1","2")||equal(v,"3");if(equal(k,"theme"))return one_of(v,"dark","light",0);if(equal(k,"startup"))return v[0]=='/'&&simple(v,true);return false;}
 
 bool config_system_apply(void){const char*layout=config_get(&system_config,"keyboard");if(!layout||!keyboard_set_layout(layout))return false;LOG_INFO("validated system settings applied");return true;}
-bool config_system_init(void){struct vfs_security_context saved;root(&saved);int e=vfs_mkdir("/system/config",0700);vfs_restore_security_context(&saved);if(e&&e!=VFS_EEXIST)return false;struct config_document defaults;config_clear(&defaults,SYSTEM_SCHEMA);config_set(&defaults,"hostname","axiom");config_set(&defaults,"locale","en_US");config_set(&defaults,"timezone","UTC");config_set(&defaults,"keyboard","us");config_set(&defaults,"display.scale","1");config_set(&defaults,"power.policy","balanced");if(!config_load(system_path,SYSTEM_SCHEMA,&defaults,&system_config))return false;for(uint32_t i=0;i<system_config.count;i++){const struct config_entry*x=&system_config.entries[i];if(!equal(x->key,"schema")&&!system_valid(x->key,x->value))return false;}return config_system_apply();}
+bool config_system_init(void){struct vfs_security_context saved;root(&saved);int e=vfs_mkdir("/var/config",0700);vfs_restore_security_context(&saved);if(e&&e!=VFS_EEXIST)return false;struct config_document defaults;config_clear(&defaults,SYSTEM_SCHEMA);config_set(&defaults,"hostname","axiom");config_set(&defaults,"locale","en_US");config_set(&defaults,"timezone","UTC");config_set(&defaults,"keyboard","us");config_set(&defaults,"display.scale","1");config_set(&defaults,"power.policy","balanced");if(!config_load(system_path,SYSTEM_SCHEMA,&defaults,&system_config))return false;for(uint32_t i=0;i<system_config.count;i++){const struct config_entry*x=&system_config.entries[i];if(!equal(x->key,"schema")&&!system_valid(x->key,x->value))return false;}return config_system_apply();}
 const struct config_document*config_system(void){return&system_config;}
 bool config_system_set(const char*k,const char*v){if(!system_valid(k,v))return false;struct config_document changed=system_config;if(!config_set(&changed,k,v)||!config_save_atomic(system_path,&changed))return false;system_config=changed;return config_system_apply();}
 

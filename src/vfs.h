@@ -14,6 +14,8 @@ struct vfs_stat{uint64_t size,allocated,created,modified;uint32_t uid,gid,mode,l
 struct vfs_security_context{uint32_t uid,gid,groups[8],group_count,creation_mask;uint64_t capabilities;};
 typedef void(*vfs_list_fn)(const char*,const struct vfs_stat*,void*);
 void vfs_init(void);
+/* One-way boot-image protection; deliberately no syscall or unseal API. */
+int vfs_seal(const char *path);
 int vfs_open(const char *path,uint32_t flags);
 int vfs_close(int fd);
 long vfs_read(int fd,void *buffer,size_t size);

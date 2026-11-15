@@ -205,9 +205,9 @@ bool process_self_test(void) {
 }
 
 bool process_user_mode_self_test(void){
-    int directory=vfs_mkdir("/system/bin",0755);if(directory&&directory!=VFS_EEXIST)return false;
-    if(!write_test_elf("/system/bin/ring3-test",user_probe,sizeof(user_probe)))return false;
-    struct user_image image;if(elf_load_vfs("/system/bin/ring3-test",&image)||vmm_user_range_valid(0x400000,1,false))return false;
+    int directory=vfs_mkdir("/tmp/process-tests",0755);if(directory&&directory!=VFS_EEXIST)return false;
+    if(!write_test_elf("/tmp/process-tests/ring3-test",user_probe,sizeof(user_probe)))return false;
+    struct user_image image;if(elf_load_vfs("/tmp/process-tests/ring3-test",&image)||vmm_user_range_valid(0x400000,1,false))return false;
     user_mode_ok=arch_enter_user(image.entry,image.stack_top,image.space.root_physical)==1&&ipc_self_test();
     return user_mode_ok;
 }
@@ -215,8 +215,8 @@ bool process_user_mode_ready(void){return user_mode_ok;}
 bool process_scheduler_self_test(void){
     uint8_t code1[]={0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0xf4};
     uint8_t code2[]={0x48,0xc7,0xc0,4,0,0,0,0x48,0xc7,0xc7,5,0,0,0,0xcd,0x80,0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0xf4};
-    if(!write_test_elf("/system/bin/sched-a",code1,sizeof(code1))||!write_test_elf("/system/bin/sched-b",code2,sizeof(code2)))return false;
-    struct user_image a,b;if(elf_load_vfs("/system/bin/sched-a",&a)||elf_load_vfs("/system/bin/sched-b",&b))return false;
+    if(!write_test_elf("/tmp/process-tests/sched-a",code1,sizeof(code1))||!write_test_elf("/tmp/process-tests/sched-b",code2,sizeof(code2)))return false;
+    struct user_image a,b;if(elf_load_vfs("/tmp/process-tests/sched-a",&a)||elf_load_vfs("/tmp/process-tests/sched-b",&b))return false;
     int first=create_user_process("sched-a",&a,1000,1000),second=create_user_process("sched-b",&b,1000,1000);if(first<0||second<0)return false;int thread=create_user_thread(first,"sched-a-worker",0x7fffffffd000ull);if(thread<0)return false;
     uint32_t old=current_slot;scheduler_marks[0]=scheduler_marks[1]=scheduler_preemptions=scheduler_sleeps=0;scheduler_active=true;current_slot=(uint32_t)first;table[first].info.state=PROCESS_RUNNING;
     uint64_t result=arch_enter_user(a.entry,a.stack_top,a.space.root_physical);scheduler_active=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;
