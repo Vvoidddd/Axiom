@@ -10,6 +10,7 @@ struct service_info {char name[32],executable[96],account[32];enum service_state
 
 bool service_init(void);
 bool service_ensure_started(void);
+void service_resume_after_pause(uint64_t milliseconds);
 bool service_supervise(uint64_t now_ms);
 bool service_stop_all(void);
 int service_start(const char *name);

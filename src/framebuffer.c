@@ -46,7 +46,10 @@ static uint8_t glyph_row(char c, unsigned row) {
         case '<': return row == 2 ? 1 : row == 3 ? 2 : row == 4 ? 4 : 0;
         case '-': return row == 3 ? 14 : 0;
         case '_': return row == 6 ? 31 : 0;
-        case '/': return (uint8_t)(1u << (4u - (row * 5u / 7u)));
+        case '*': { static const uint8_t star[7]={0,21,14,31,14,21,0}; return star[row]; }
+        case '/': return (uint8_t)(1u << (row * 5u / 7u));
+        case '\\': return (uint8_t)(1u << (4u - (row * 5u / 7u)));
+        case '+': return row==3?31:(row>=1&&row<=5?4:0);
         case '=': return (row == 2 || row == 4) ? 31 : 0;
         case '?': { static const uint8_t q[7]={14,17,1,2,4,0,4}; return q[row]; }
         case '!': return row < 5 || row == 6 ? 4 : 0;
@@ -84,6 +87,32 @@ void fb_rect(uint64_t x, uint64_t y, uint64_t w, uint64_t h, uint32_t rgb) {
 }
 
 void fb_clear(uint32_t rgb) { fb_rect(0, 0, fb->width, fb->height, rgb); }
+
+static uint32_t pointer_saved[18][12];
+static uint64_t pointer_x,pointer_y;
+static bool pointer_visible;
+void fb_pointer_hide(void){
+    if(!pointer_visible||!fb)return;
+    for(unsigned y=0;y<18&&pointer_y+y<fb->height;y++){
+        volatile uint32_t*row=(void*)((uintptr_t)fb->address+(pointer_y+y)*fb->pitch);
+        for(unsigned x=0;x<12&&pointer_x+x<fb->width;x++)row[pointer_x+x]=pointer_saved[y][x];
+    }
+    pointer_visible=false;
+}
+void fb_pointer_show(uint64_t x,uint64_t y){
+    fb_pointer_hide();if(!fb||x>=fb->width||y>=fb->height)return;
+    pointer_x=x;pointer_y=y;
+    for(unsigned dy=0;dy<18&&y+dy<fb->height;dy++){
+        volatile uint32_t*row=(void*)((uintptr_t)fb->address+(y+dy)*fb->pitch);
+        for(unsigned dx=0;dx<12&&x+dx<fb->width;dx++){
+            pointer_saved[dy][dx]=row[x+dx];
+            bool arrow=dy<13&&dx<=dy/2;
+            bool stem=dy>=10&&dy<18&&dx>=3&&dx<=5;
+            if(arrow||stem)row[x+dx]=native_colour(dx==0||dx==dy/2||dy==17?0x101318:0xffffff);
+        }
+    }
+    pointer_visible=true;
+}
 
 void fb_text(uint64_t x, uint64_t y, const char *text, uint32_t rgb, unsigned scale) {
     uint64_t origin = x;

@@ -5,6 +5,7 @@
 #include "acpi.h"
 #include "memory.h"
 #include "process.h"
+#include "mouse.h"
 #include <stddef.h>
 
 struct idt_entry { uint16_t low,selector; uint8_t ist,flags; uint16_t mid; uint32_t high,zero; } __attribute__((packed));
@@ -19,6 +20,7 @@ static uint64_t counts[256];
 extern void *isr_stub_table[];
 extern void isr_255(void);
 extern void isr_128(void);
+extern void isr_44(void);
 extern void arch_return_from_user(uint64_t result) __attribute__((noreturn));
 static volatile uint32_t *lapic;
 static volatile uint32_t *ioapic;
@@ -52,7 +54,7 @@ static void pic_init(void) {
     outb(0x21,0x20); io_wait(); outb(0xa1,0x28); io_wait();
     outb(0x21,4); io_wait(); outb(0xa1,2); io_wait();
     outb(0x21,1); io_wait(); outb(0xa1,1); io_wait();
-    outb(0x21,0xfc); outb(0xa1,0xff);
+    outb(0x21,0xf8); outb(0xa1,0xef);
 }
 static void apic_init(uint64_t hhdm){
     (void)hhdm;
@@ -62,7 +64,8 @@ static void apic_init(uint64_t hhdm){
         ioapic=(void *)(uintptr_t)0xffffd00000001000ull;ioapic[0]=1;uint32_t version=ioapic[4];unsigned maximum=(version>>16)&255;
         for(unsigned i=0;i<=maximum;i++){ioapic_write(0x10+2*i,1u<<16);ioapic_write(0x11+2*i,0);}
         uint32_t destination=(lapic[0x20/4]>>24)<<24;
-        for(unsigned irq=0;irq<2;irq++){uint32_t gsi=acpi_irq_gsi(irq);if(gsi>maximum)continue;uint16_t flags=acpi_irq_flags(irq);uint32_t low=32+irq;if((flags&3)==3)low|=1u<<13;if((flags&12)==12)low|=1u<<15;ioapic_write(0x10+2*gsi,low);ioapic_write(0x11+2*gsi,destination);}
+        const unsigned irqs[]={0,1,12};
+        for(unsigned i=0;i<3;i++){unsigned irq=irqs[i];uint32_t gsi=acpi_irq_gsi(irq);if(gsi>maximum)continue;uint16_t flags=acpi_irq_flags(irq);uint32_t low=32+irq;if((flags&3)==3)low|=1u<<13;if((flags&12)==12)low|=1u<<15;ioapic_write(0x10+2*gsi,low);ioapic_write(0x11+2*gsi,destination);}
         outb(0x21,0xff);outb(0xa1,0xff);
     }
 }
@@ -70,15 +73,18 @@ void arch_init(uint64_t hhdm) {
     __asm__ volatile("cli");KASSERT(tss.ist[0]!=0);gdt_init();
     for(unsigned i=0;i<34;i++) idt_set(i,isr_stub_table[i],i<32?1:0);
     idt_set(255,isr_255,0);
+    idt_set(44,isr_44,0);
     idt_set(128,isr_128,0);idt[128].flags=0xee;
     struct table_ptr p={sizeof(idt)-1,(uint64_t)(uintptr_t)idt}; __asm__ volatile("lidt %0"::"m"(p));
-    pic_init(); apic_init(hhdm); hardware_irq_init(); LOG_INFO("GDT TSS IDT PIC APIC and IRQ devices online");
+    pic_init(); apic_init(hhdm); hardware_irq_init();
+    if(mouse_init())LOG_INFO("PS/2 mouse online");else LOG_WARN("PS/2 mouse unavailable; keyboard navigation active");
+    LOG_INFO("GDT TSS IDT PIC APIC and IRQ devices online");
     __asm__ volatile("sti");
 }
 void arch_interrupt_dispatch(uint64_t *f) {
     uint64_t vector=f[15], error=f[16], rip=f[17]; counts[vector&255]++;
     if(vector==32){ hardware_timer_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);process_timer_interrupt(f,hardware_uptime_ms());return; }
-    if(vector==33){ hardware_keyboard_irq();if(lapic_enabled)lapic[0xb0/4]=0;else outb(0x20,0x20);return; }
+    if(vector==33||vector==44){ hardware_keyboard_irq();if(lapic_enabled)lapic[0xb0/4]=0;else{if(vector==44)outb(0xa0,0x20);outb(0x20,0x20);}return; }
     if(vector==128){if(f[14]==0xa710)arch_return_from_user(f[9]);if(process_syscall_interrupt(f))return;f[14]=(uint64_t)process_syscall(f[14],f[9],f[8],f[11],f[5]);return;}
     if(vector==255) return;
     (void)error;(void)rip;panic_frame("CPU exception",f);

@@ -33,6 +33,14 @@ These are RAM-backed runtime trees: this change does not add persistent
 installation, disk migration, or signed updates. Updating the shipped image
 currently requires rebuilding and rebooting.
 
+Account setup and login show all fields at once, with a blinking text caret,
+highlighted focus, visible password masks, and a PS/2 mouse pointer. Click a
+field or use Tab/Shift+Tab; Enter advances to the next field and submits from
+the last field. Arrow keys, Home/End, Backspace, and Delete edit text. The
+recovery-key acknowledgement also has a clickable Continue button. Keyboard
+navigation remains available when no PS/2 mouse is detected; USB HID support
+is still on the roadmap.
+
 ## Build on Windows with Arch WSL
 
 Install the build and emulator dependencies inside Arch WSL:
@@ -188,11 +196,22 @@ Run the host VFS regression check with address and undefined-behavior sanitizers
 
 ```sh
 make test-vfs
+make test-input
 ```
 
 It checks immutable trees, read-only mounts, aliases, metadata, open descriptors,
 recursive deletion, rename cycles, and writable configuration/user data. Boot
 also checks the actual sealed initramfs before launching user programs.
+
+The account-input check uses Python 3's standard library and QEMU QMP to click
+fields out of order, verify caret/mask pixels, create an account, and sign in
+on BIOS and UEFI. It saves framebuffer screenshots and serial logs:
+
+```sh
+python3 tests/account-input.py build/axiom.iso
+```
+
+Set `OVMF` if your firmware is not at `/usr/share/OVMF/OVMF_CODE.fd`.
 
 The smoke suite boots QEMU through BIOS and UEFI and validates command scripts,
 heap allocation/free, four-processor startup, reboot, deliberate exception

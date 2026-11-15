@@ -20,6 +20,8 @@ jobs:
         run: ./all
       - name: Check immutable VFS boundaries
         run: make test-vfs
+      - name: Check text input and mouse decoding
+        run: make test-input
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}

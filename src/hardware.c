@@ -1,5 +1,6 @@
 #include "hardware.h"
 #include "io.h"
+#include "mouse.h"
 #include <stdbool.h>
 
 static volatile uint64_t ticks;
@@ -78,11 +79,14 @@ const char *keyboard_layout_name(void){return layout?"dvorak":"us";}
 void hardware_irq_init(void){ uint16_t divisor=1193182u/1000u; outb(0x43,0x36);outb(0x40,(uint8_t)divisor);outb(0x40,(uint8_t)(divisor>>8)); }
 void hardware_timer_irq(void){ ticks++; }
 void hardware_keyboard_irq(void){
-    uint8_t raw=inb(0x60);if(raw==0xe0){extended=true;return;}bool released=(raw&0x80)!=0;uint8_t code=raw&0x7f;
+    uint8_t status=inb(0x64);if(!(status&1))return;
+    uint8_t raw=inb(0x60);if(status&0x20){mouse_receive(raw);return;}
+    if(raw==0xe0){extended=true;return;}bool released=(raw&0x80)!=0;uint8_t code=raw&0x7f;
     if(code==42||code==54){shift_down=!released;return;}if(code==58&&!released){caps_lock=!caps_lock;return;}
     const char *map=layout?dvorak:keymap;char c=extended?0:map[code];uint8_t special=KEY_NONE;
     if(extended){if(code==75)special=KEY_LEFT;else if(code==77)special=KEY_RIGHT;else if(code==72)special=KEY_UP;else if(code==80)special=KEY_DOWN;else if(code==83)special=KEY_DELETE;else if(code==71)special=KEY_HOME;else if(code==79)special=KEY_END;extended=false;}
     if(c>='a'&&c<='z'&&(shift_down!=caps_lock))c=(char)(c-'a'+'A');
+    else if(shift_down){const char*plain="1234567890-=[];\'`,./\\",*shifted="!@#$%^&*()_+{}:\"~<>?|";for(unsigned i=0;plain[i];i++)if(c==plain[i]){c=shifted[i];break;}}
     struct key_event event={code,c,special,!released,shift_down,caps_lock};unsigned next=key_write+1;if(next-key_read<=128)key_queue[key_write++&127]=event;
 }
 uint64_t hardware_uptime_ms(void){return ticks;}

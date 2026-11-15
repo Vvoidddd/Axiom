@@ -86,6 +86,9 @@ tests on both BIOS and UEFI.
 - [x] Implement locale, timezone, hostname, keyboard, power, and display configuration services.
 - [x] Add clean shutdown and reboot coordination so applications flush files before power-off.
 - [x] Separate immutable system files from mutable configuration, application data, logs, and user files.
+- [x] Add PS/2 mouse input and clickable account setup, login, and recovery-key acknowledgement.
+- [x] Show full account forms with a blinking caret, focus borders, password masks, keyboard navigation, and bounded text editing.
+- [x] Preserve service heartbeat age across lock/login pauses so unlocking does not restart healthy services.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 

@@ -12,6 +12,8 @@ void fb_text(uint64_t x, uint64_t y, const char *text, uint32_t rgb, unsigned sc
 uint64_t fb_width(void);
 uint64_t fb_height(void);
 struct limine_framebuffer *fb_info(void);
+void fb_pointer_hide(void);
+void fb_pointer_show(uint64_t x,uint64_t y);
 
 #endif
 

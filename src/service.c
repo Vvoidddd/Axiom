@@ -10,6 +10,13 @@
 static struct service_info units[SERVICE_MAX];
 static uint32_t count;
 
+void service_resume_after_pause(uint64_t milliseconds){
+    /* The kernel login screen suspends all user tasks. Preserve heartbeat age,
+       excluding that interval, rather than treating the pause as a service failure. */
+    for(uint32_t i=0;i<count;i++)if(units[i].state==SERVICE_RUNNING)
+        units[i].last_heartbeat_ms+=milliseconds;
+}
+
 static bool equal(const char*a,const char*b){while(*a&&*a==*b){a++;b++;}return!*a&&!*b;}
 static void copy(char*d,const char*s,uint32_t cap){uint32_t i=0;while(s[i]&&i+1<cap){d[i]=s[i];i++;}d[i]=0;}
 static uint32_t decimal(const char*s,uint32_t fallback){uint32_t value=0;if(!s||!*s)return fallback;while(*s){if(*s<'0'||*s>'9')return fallback;value=value*10+(uint32_t)(*s++-'0');}return value;}

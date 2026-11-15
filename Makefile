@@ -111,6 +111,11 @@ test-vfs: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/vfs-immutable.c src/vfs.c -o $(BUILD)/vfs-immutable-test
 	$(BUILD)/vfs-immutable-test
 
+.PHONY: test-input
+test-input: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -I$(LIMINE) tests/input.c src/form.c src/mouse.c src/framebuffer.c -o $(BUILD)/input-test
+	$(BUILD)/input-test
+
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/user $(KERNEL) $(ISO) $(ISO_ROOT)
 
