@@ -22,6 +22,10 @@ const struct account_info *account_current(void){return &user;}
 void log_write(const char*a,const char*b){(void)a;(void)b;}
 const char *keyboard_layout_name(void){return "us";}
 bool config_user_set(const char*a,const char*b){(void)a;(void)b;return true;}
+bool checkpoint_active(void){return false;}
+bool checkpoint_save(void){return true;}
+const char*checkpoint_status(void){return "Live session";}
+bool account_save(void){return true;}
 bool keyboard_poll_event(struct key_event*out){if(!has_key)return false;*out=key;has_key=false;return true;}
 bool mouse_poll_event(struct mouse_event*out){if(!has_mouse)return false;*out=mouse;has_mouse=false;return true;}
 static long press(char c,unsigned scan){key=(struct key_event){.pressed=true,.character=c,.scancode=scan};has_key=true;return desktop_poll();}

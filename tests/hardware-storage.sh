@@ -22,8 +22,10 @@ run(){
  echo "PASS: $firmware $controller read-only device"
 }
 mode=${2:-all}
+case $mode in all|ahci|nvme) ;; *) echo "Unknown hardware-storage mode: $mode" >&2; exit 2;; esac
 [[ $mode == all || $mode == ahci ]]&&run ahci bios
 [[ $mode == all || $mode == ahci ]]&&run ahci uefi
 # SeaBIOS attempts to initialize an attached NVMe device before Limine and
 # stalls this QEMU fixture. The same driver is exercised under OVMF here.
 [[ $mode == all || $mode == nvme ]]&&run nvme uefi
+echo "All selected hardware-storage tests passed."

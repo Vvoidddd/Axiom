@@ -5,8 +5,9 @@
 #define BLOCK_MAX_DEVICES 16
 #define BLOCK_MAX_PARTITIONS 32
 struct block_device;
+typedef int(*block_sync_fn)(struct block_device*);
 typedef int(*block_io_fn)(struct block_device*,uint64_t,uint32_t,void*);
-struct block_device{char name[16],model[40];uint64_t sectors;uint32_t sector_size;bool readonly,removable,present;block_io_fn read,write;void*driver;};
+struct block_device{char name[16],model[40];uint64_t sectors;uint32_t sector_size;bool readonly,removable,present;block_io_fn read,write;block_sync_fn sync;void*driver;};
 struct block_partition{char name[20];struct block_device*device;uint64_t first_lba,sectors;uint8_t type;bool gpt;};
 void block_init(void);
 int block_register(const struct block_device *device);

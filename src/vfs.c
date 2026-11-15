@@ -122,3 +122,4 @@ bool vfs_self_test(void){
     test_result(vfs_security_self_test(),35,&ok);test_result(vfs_check(false)==0,36,&ok);return ok;
 }
 uint32_t vfs_self_test_failure(void){return self_test_failure;}
+#include "vfs_snapshot.inc"

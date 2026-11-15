@@ -8,6 +8,7 @@
 #include "config.h"
 #include "form.h"
 #include "log.h"
+#include "checkpoint.h"
 #include <axiom/syscall.h>
 
 enum app {HOME,TERMINAL,FILES,EDITOR,SETTINGS};
@@ -87,6 +88,7 @@ static void save_copy(void){
     long written=vfs_write(fd,document,editor.length);int closed=vfs_close(fd);
     if(written!=(long)editor.length||closed){vfs_unlink(path,false);message("Save failed. Your draft is still here; original files unchanged.");return;}
     unsaved=false;copy(status,"Saved in home: ",sizeof(status));copy(status+15,name,sizeof(status)-15);dirty=true;
+    if(!checkpoint_save())message("Saved in RAM only. Data disk checkpoint failed.");
     log_write("DESKTOP-SAVED",path);
 }
 static void draw_editor(void){
@@ -116,14 +118,15 @@ static void draw(void){
     const char*labels[]={"Home","Terminal","Files","Editor","Settings"};
     for(unsigned i=0;i<5;i++)button(12+(int)i*126,height-40,118,labels[i],app==(enum app)i);
     button(width-240,height-40,100,"Lock",false);button(width-128,height-40,116,"Log out",false);
+    button(width-326,height-40,76,"Save",false);
     if(app==HOME){
         fb_text(64,130,"AXIOM",0xf4f7fa,8);
         text(68,210,"Your system. Your rules.",0xa9c5df);
         text(68,280,"Open an app from the panel below.",0xf4f7fa);
         text(68,316,"F2 Terminal   F3 Files   F4 Editor   F5 Settings",0xa9c5df);
-        text(68,380,"LIVE SESSION",0xffcf7b);
-        text(68,410,"Files and accounts are RAM-backed in this build.",0xa9c5df);
-        text(68,440,"They do not survive a reboot.",0xa9c5df);
+        text(68,380,checkpoint_active()?"PERSISTENT DATA DISK":"LIVE SESSION",0xffcf7b);
+        text(68,410,checkpoint_active()?"Save commits your files and accounts to disk.":"Files and accounts are RAM-backed in this build.",0xa9c5df);
+        text(68,440,checkpoint_active()?"Use Save / F6 before powering off the VM.":"They do not survive a reboot.",0xa9c5df);
     }else{
         fb_rect(wx+6,wy+6,ww,wh,0x0b1826);fb_rect(wx,wy,ww,wh,0x101318);
         fb_rect(wx,wy,ww,34,0x293b50);text(wx+14,wy+10,titles[app],0xf4f7fa);
@@ -171,6 +174,7 @@ static long session_action(long action){
 }
 static long click(void){
     if(my>=height-48){
+        if(inside(width-326,height-40,76,32)){message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");if(app==HOME)switch_app(SETTINGS);return 0;}
         for(unsigned i=0;i<5;i++)if(inside(12+(int)i*126,height-40,118,32)){switch_app((enum app)i);return 0;}
         if(inside(width-240,height-40,100,32))return session_action(AXIOM_KEY_SESSION_LOCK);
         if(inside(width-128,height-40,116,32))return session_action(AXIOM_KEY_SESSION_LOGOUT);
@@ -205,6 +209,7 @@ long desktop_poll(void){
     struct key_event e;long value=0;
     if(keyboard_poll_event(&e)&&e.pressed){
         if(e.scancode>=0x3b&&e.scancode<=0x3f)switch_app((enum app)(e.scancode-0x3b));
+        else if(e.scancode==0x40){message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");if(app==HOME)switch_app(SETTINGS);}
         else if(app==HOME&&e.character>=32&&e.character<=126){switch_app(TERMINAL);value=(unsigned char)e.character;}
         else if(app==TERMINAL)value=(unsigned char)e.character;
         else if(app==FILES){

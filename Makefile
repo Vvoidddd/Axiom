@@ -121,6 +121,16 @@ test-desktop: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Isdk/include -I$(LIMINE) tests/desktop.c src/desktop.c src/console.c src/framebuffer.c src/form.c src/vfs.c -o $(BUILD)/desktop-test-host
 	$(BUILD)/desktop-test-host
 
+.PHONY: test-snapshot
+test-snapshot: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/snapshot.c src/vfs.c -o $(BUILD)/snapshot-test
+	$(BUILD)/snapshot-test
+
+.PHONY: test-checkpoint
+test-checkpoint: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -Isdk/include -I$(LIMINE) tests/checkpoint.c src/checkpoint.c src/vfs.c src/power.c -o $(BUILD)/checkpoint-test
+	$(BUILD)/checkpoint-test
+
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/user $(KERNEL) $(ISO) $(ISO_ROOT)
 

@@ -7,6 +7,14 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Persist accounts, homes, configuration, logs, ownership, modes, timestamps, links, sparse pages, and quotas on an explicitly prepared SATA data disk.
+- [x] Commit bounded mutable-tree snapshots through two CRC-checked generations, flush the device before committing, and fall back to the prior valid generation.
+- [x] Validate and stage restored trees before replacing live state; preserve immutable system trees and reject corrupt data without overwriting the disk.
+- [x] Add offline raw-data-image backup and restore tools for user homes, account data, configuration, and filesystem metadata, refusing existing destinations.
+- [x] Define kernel, syscall, driver, service, package, application, configuration, and persistent-image compatibility policies in `docs/compatibility.md`.
+- [x] Add desktop Save/F6, terminal `save`, editor-copy checkpoints, and coordinated power-off checkpoints for prepared data disks.
+- [x] Verify fresh account creation, independent BIOS/UEFI boots, authentication, saved file bytes, SATA rescans, and backup/restore round trips.
+
 - [x] Open a first mouse-driven desktop after login with wallpaper, an app panel, and F1-F5 app shortcuts.
 - [x] Keep the ring-3 terminal in a bounded window with scrolling and retained output when hidden.
 - [x] Browse permitted VFS directories and open small text files from a graphical file browser.
@@ -140,9 +148,7 @@ runtime, serial-log, and framebuffer-screenshot checks pass.
 ## Phase 3B: Core System Services
 
 - [ ] Add software installation, removal, dependency resolution, signed updates, rollback, and an offline recovery environment.
-- [ ] Add backup and restore tools for user homes, account data, configuration, and filesystem metadata.
 - [ ] Provide safe mode, single-user recovery mode, emergency shell, and booting a previous known-good system version.
-- [ ] Define stable kernel, syscall, driver, service, package, and application compatibility policies.
 - [ ] Create end-to-end installation tests covering blank disks, upgrades, multiple users, admin recovery, and failed updates.
 
 Progress log (2026-09-27): the first half is implemented and verified in BIOS
@@ -203,11 +209,41 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 
 ## Current Next Milestone
 
-The first Phase 4 desktop preview is available alongside the unfinished Phase
-3B work. It uses the boot framebuffer and a kernel-hosted single-app interface;
-it does not complete the user-space compositor or GUI toolkit milestones.
-Next priorities for everyday usability are safe persistent installation and
-recovery, followed by independent desktop application windows and richer apps.
-Software/package lifecycle, backup/restore, compatibility policy, and the full
-blank-disk/upgrade/failure test matrix also remain open. Live-session files and
-accounts are still RAM-backed and disappear on reboot.
+The desktop can now keep committed data across boots on an explicitly prepared
+64 MiB SATA image. It still boots from the ISO and is not a full disk installer.
+Without that image, the desktop remains a volatile live session. Phase 3B
+package/update/recovery work and Phase 4's user-space compositor remain open.
+
+The new phases below turn these foundations into a usable installed system.
+Phase 8 has started with the persistent-image and offline backup/restore work
+recorded in Completed. New phases do not imply that Phases 3B-7 are finished.
+
+## Phase 8: Installed Systems and Offline Recovery
+
+- [ ] Build an installer that previews the exact target disk, partitions, and data loss before a separately confirmed write; test installing and booting without the ISO on BIOS and UEFI.
+- [ ] Replace whole-tree checkpoints with filesystem-backed incremental writes and test sudden power loss during ordinary file saves.
+- [ ] Add a boot recovery menu that can select the previous valid data generation without modifying either generation first.
+- [ ] Add image inspection/repair tooling that reports damaged records and exports recoverable files to a new image.
+- [ ] Add snapshot space accounting and a visible warning before the 8 MiB snapshot or 256-node VFS limits prevent saving.
+- [ ] Add supported image resizing and a migration test that preserves accounts, permissions, sparse files, and recovery access.
+- [ ] Add encrypted user-data storage only after secure entropy, key derivation, recovery, and power-loss behavior are validated.
+- [ ] Support backups/export of a single user's home without exposing another user's files or the account database.
+
+## Phase 9: Workspace and Productivity
+
+- [ ] Retain unsaved documents through screen locking and user switching without exposing one session's buffers to another.
+- [ ] Add atomic replace to the VFS and an editor Save As flow; prove failed writes never truncate the old document.
+- [ ] Add editor undo/redo, selection, search, line navigation, and bounded large-file handling.
+- [ ] Add file associations and Open With based on validated file types rather than executable filename guesses.
+- [ ] Restore approved per-user window positions and open documents after reboot, with a way to disable session restore.
+- [ ] Add keyboard access to every desktop control, visible focus, scalable text, and high-contrast rendering tests.
+- [ ] Add safe host/guest file import and export with explicit destinations and permission checks.
+
+## Phase 10: Hardware Qualification and Maintainable Releases
+
+- [ ] Run a documented VMware SATA/input/display test matrix and distinguish verified VMware versions from QEMU-only results.
+- [ ] Add VirtualBox and physical-machine smoke profiles with recorded CPU, firmware, storage, input, and graphics results.
+- [ ] Fix and fault-test partial page-allocation rollback before increasing snapshot or application memory limits.
+- [ ] Add automated old-release data-image migration and rollback fixtures to CI, including corrupt and interrupted upgrades.
+- [ ] Build a user-approved diagnostic export that redacts credentials, recovery keys, and private file contents by default.
+- [ ] Publish reproducible release manifests, artifact hashes, compatibility notes, and a tested recovery procedure for each release.

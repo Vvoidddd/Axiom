@@ -1,3 +1,4 @@
+#include "checkpoint.h"
 #include "desktop.h"
 #include "form.h"
 #include <stdbool.h>
@@ -73,7 +74,7 @@ static void cmd_help(const char *args) {
     console_write("TESTS: MEMTEST CPUTEST\n");
     console_write("TOOLS: HELP CLEAR ECHO MEMMAP FBINFO ALLOCSTAT LOGS IRQS RANDOM\n");
     console_write("FILES: LS CD PWD CAT TOUCH MKDIR CP MV RM LN CHMOD CHOWN\n");
-    console_write("STORAGE: DISKS PARTITIONS MOUNT UNMOUNT DF DU FSCK\n");
+    console_write("STORAGE: DISKS PARTITIONS MOUNT UNMOUNT DF DU FSCK SAVE\n");
     console_write("PROCESSES: PS PROCTEST\n");
     console_write("USERS: ACCOUNTS USERADD USERDEL USERMOD PASSWD ID WHOAMI GROUPS GROUPADD GROUPMOD\n");
     console_write("SECURITY: ELEVATE CAPS SECURITYLOG RECOVERYKEY ENV SETENV LOCK LOGOUT\n");
@@ -307,11 +308,13 @@ static void cmd_run(const char *args){char script[256];size_t n=0;while(args[n]&
 static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;accounttest;configtest;devicetest;accounts;ps;packages;services;servicetest;settings;powerstatus;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
 
 static void cmd_reboot(const char *args) { if(!require_cap(CAP_POWER,"reboot")||!confirmed(args)){console_write("USAGE: REBOOT --CONFIRM\n");return;}account_audit("reboot","confirmed");LOG_INFO("reboot requested");console_write("COORDINATING CLEAN REBOOT...\n");if(!power_prepare(POWER_ACTION_REBOOT)){console_write("REBOOT REFUSED: FLUSH OR SERVICE FAILURE.\n");return;}console_write("ALL WRITES FLUSHED. REBOOTING...\n");machine_reboot(); }
+static void cmd_save(const char*a){(void)a;if(!checkpoint_active()){console_write(checkpoint_status());console_putc('\n');return;}bool ok=account_save()&&checkpoint_save();console_write(ok?"SESSION SAVED TO DATA DISK.\n":"SESSION SAVE FAILED.\n");}
+
 static void cmd_halt(const char *args) { if(!require_cap(CAP_POWER,"halt")||!confirmed(args)){console_write("USAGE: HALT --CONFIRM\n");return;}account_audit("halt","confirmed");console_write("SYSTEM HALTED.\n");machine_halt(); }
 
 struct command { const char *name; void (*handler)(const char *); };
 static const struct command commands[] = {
-    {"help",cmd_help},{"about",cmd_about},{"clear",cmd_clear},{"echo",cmd_echo},
+    {"save",cmd_save},{"help",cmd_help},{"about",cmd_about},{"clear",cmd_clear},{"echo",cmd_echo},
     {"version",cmd_version},{"sysinfo",cmd_sysinfo},{"cpu",cmd_cpu},{"ram",cmd_ram},
     {"modules",cmd_modules},{"memtest",cmd_memtest},{"cputest",cmd_cputest},
     {"allocstat",cmd_allocstat},{"heaptest",cmd_heaptest},{"fault",cmd_fault},
@@ -474,8 +477,6 @@ void kmain(void) {
     log_init();
     splash();
     loading_screen();
-    first_boot_setup();
-    show_initial_recovery_key();
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
     LOG_INFO("preemptive ring 3 scheduler probe passed");
     storage_probe_hardware();
@@ -484,6 +485,15 @@ void kmain(void) {
     bool parallel_ok=smp_start(mp_request.response)&&smp_startup_probe_passed();
     if(parallel_ready)account_remove("parallel-login");
     if(parallel_ready&&parallel_ok)LOG_INFO("concurrent login serialization verified on all processors");else LOG_ERROR("concurrent login serialization failed");
+    int restored=checkpoint_attach();
+    if(restored<0){console_init();console_write("DATA DISK COULD NOT BE RESTORED. Disk was not overwritten.\nDetach it to boot a live session, or restore a backup.\n");machine_halt();}
+    if(restored==2){
+        char discarded_key[33];account_take_recovery_key(discarded_key,sizeof(discarded_key));
+        for(unsigned i=0;i<sizeof(discarded_key);i++)discarded_key[i]=0;
+        if(!account_load()||!config_system_init()){console_init();console_write("SAVED ACCOUNT OR CONFIGURATION DATA INVALID.\n");machine_halt();}
+    }
+    first_boot_setup();show_initial_recovery_key();
+    if(!checkpoint_save()){console_init();console_write("INITIAL DATA DISK SAVE FAILED.\n");machine_halt();}
     for(;;){
         graphical_login();
         console_init();

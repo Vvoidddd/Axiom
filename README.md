@@ -115,8 +115,55 @@ This is a first framebuffer desktop with one visible app at a time, hosted in
 the kernel around the ring-3 shell. A user-space compositor, independent app
 windows, notifications, image viewer, and system monitor remain on the roadmap.
 The desktop requires at least 960x600; smaller framebuffers keep the console.
-**Files and accounts are still RAM-backed and do not survive reboot.** This
-build is a live desktop preview, not a persistent installed daily-use OS.
+Without a prepared data disk, files and accounts remain RAM-backed and disappear
+on reboot. With one, committed state survives booting the ISO again. This is
+still a desktop preview, not a full installed daily-use OS.
+
+## Persistent data disk
+
+Create a **new** dedicated 64 MiB raw image; the script refuses existing files:
+
+```sh
+python3 scripts/create-data-disk.py axiom-data.img
+```
+
+Attach it as a SATA disk while continuing to boot the ISO. For QEMU, add
+`-drive if=none,id=data,format=raw,file=axiom-data.img -device ide-hd,drive=data,bus=ide.1`
+to the q35 invocation. For VMware, convert the new raw image to a new VMDK with
+`qemu-img convert -f raw -O vmdk axiom-data.img axiom-data.vmdk`, then attach that
+VMDK as an existing **SATA** disk with the VM powered off. Use a new output name
+when converting; do not overwrite a previously used data disk. QEMU BIOS/UEFI
+is tested; VMware compatibility still needs a real VMware validation run.
+
+The desktop displays **PERSISTENT DATA DISK** when enabled. Click Save, press F6,
+or enter `save` in Terminal before powering off the VM. Editor Save copy and
+coordinated `shutdown`/`reboot` also checkpoint. Only committed files survive an
+unexpected power loss; an unsaved editor buffer is not a file. Initial account
+setup is checkpointed after recovery-key acknowledgement. Keep that key offline.
+
+The image holds two CRC-checked generations of `/users` and `/var`, including
+account verifiers, settings, permissions, links, sparse data, and logs. Restore
+validates the entire replacement tree before committing it. Corrupt or unknown
+images are not reformatted; a prior valid generation is used when possible.
+Ordinary disks and NVMe devices remain read-only. Each snapshot is limited to
+8 MiB, the existing VFS is limited to 256 nodes, and mounted subtrees or links
+whose backing files are outside the saved trees cause saving to fail visibly.
+The data image is **not encrypted**; protect it like a disk containing private files.
+CRC checks detect accidental corruption; they do not authenticate an image or
+backup. Only attach data images and backups you trust.
+
+Power off the VM before offline backup/restore. These commands support **raw**
+data images and always create a new destination:
+
+```sh
+python3 scripts/data-disk.py inspect axiom-data.img
+python3 scripts/data-disk.py backup axiom-data.img backup.img
+python3 scripts/data-disk.py restore backup.img restored.img
+```
+
+Attach `restored.img` instead of the original to test recovery. For VMDK images,
+keep an offline copy of the complete VMDK or convert a copy to raw first. See
+[compatibility policy](docs/compatibility.md) for format and migration rules.
 
 ## Console
 
@@ -229,6 +276,9 @@ Run the host VFS regression check with address and undefined-behavior sanitizers
 make test-vfs
 make test-input
 make test-desktop
+make test-snapshot
+make test-checkpoint
+python3 tests/data-disk.py
 ```
 
 It checks immutable trees, read-only mounts, aliases, metadata, open descriptors,
@@ -242,6 +292,7 @@ on BIOS and UEFI. It saves framebuffer screenshots and serial logs:
 ```sh
 python3 tests/account-input.py build/axiom.iso
 python3 tests/desktop.py build/axiom.iso build/desktop-test
+python3 tests/persistence.py build/axiom.iso build/persistence
 ```
 
 Set `OVMF` if your firmware is not at `/usr/share/OVMF/OVMF_CODE.fd`.

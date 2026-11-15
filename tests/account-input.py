@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,13 +16,16 @@ out.mkdir(parents=True, exist_ok=True)
 ovmf = os.environ.get("OVMF", "/usr/share/OVMF/OVMF_CODE.fd")
 
 
-def run(firmware, exercise=None):
-    log = out / f"{firmware}.log"
+def run(firmware, exercise=None, extra_args=(), existing=False):
+    saved_log = out / f"{firmware}.log"
     with tempfile.TemporaryDirectory() as tmp:
+        # Keep QEMU's actively written log off Windows/OneDrive mounts.
+        log = Path(tmp) / f"{firmware}.log"
         address = str(Path(tmp) / "qmp")
         args = [os.environ.get("QEMU", "qemu-system-x86_64"), "-M", "q35", "-smp", "4",
                 "-m", "512M", "-cdrom", str(iso), "-boot", "d", "-display", "none",
                 "-serial", f"file:{log}", "-qmp", f"unix:{address},server=on,wait=off", "-no-reboot"]
+        args += list(extra_args)
         if firmware == "uefi":
             args += ["-drive", f"if=pflash,format=raw,readonly=on,file={ovmf}"]
         with (out / f"{firmware}-qemu.log").open("w") as errors:
@@ -94,34 +98,35 @@ def run(firmware, exercise=None):
                         start = (y * width + x) * 3
                         return data[start:start + 3]
 
-                    wait_for("[FORM] account setup ready")
-                    assert "PS/2 mouse online" in log.read_text()
-                    initial = screenshot("setup")
-                    assert pixel(initial, 250, 193) == bytes.fromhex("4f8fe8"), "No initial focus border"
-                    assert pixel(initial, 514, 390) == b"\xff\xff\xff", "No mouse pointer"
-                    key("left")  # Reset blink; caret must be visible even before typing.
-                    assert pixel(screenshot("caret"), 265, 203) == bytes.fromhex("f4f7fa"), "No caret"
+                    if not existing:
+                        wait_for("[FORM] account setup ready")
+                        assert "PS/2 mouse online" in log.read_text()
+                        initial = screenshot("setup")
+                        assert pixel(initial, 250, 193) == bytes.fromhex("4f8fe8"), "No initial focus border"
+                        assert pixel(initial, 514, 390) == b"\xff\xff\xff", "No mouse pointer"
+                        key("left")  # Reset blink; caret must be visible even before typing.
+                        assert pixel(screenshot("caret"), 265, 203) == bytes.fromhex("f4f7fa"), "No caret"
 
-                    # Fill fields out of order, proving that clicks actually change focus.
-                    click(280, 310); type_text("axiomtest123!")
-                    masked = screenshot("password")
-                    assert pixel(masked, 265, 308) == bytes.fromhex("f4f7fa"), "Password mask not drawn"
-                    click(280, 410); type_text("axiomtest123!")
-                    click(280, 210); type_text("0Voix"); key("backspace"); type_text("d")
-                    key("tab"); key("shift-tab")
-                    click(500, 495)
-                    rejected = screenshot("invalid-name")
-                    assert pixel(rejected, 250, 524) == bytes.fromhex("ff667b"), "No specific validation message"
-                    assert pixel(rejected, 250, 475) == bytes.fromhex("315e97"), "Error overlaps the button"
-                    assert pixel(rejected, 265, 308) == bytes.fromhex("f4f7fa"), "Rejected form lost password"
-                    assert "first administrator account created" not in log.read_text()
-                    key("home"); key("delete")  # Correct 0Void to Void without retyping passwords.
-                    screenshot("filled")
-                    click(500, 495)
-                    wait_for("first administrator account created")
-                    time.sleep(1.5)
-                    position[:] = [512, 384]  # Each new form starts its pointer at the center.
-                    click(500, 450)
+                        # Fill fields out of order, proving that clicks actually change focus.
+                        click(280, 310); type_text("axiomtest123!")
+                        masked = screenshot("password")
+                        assert pixel(masked, 265, 308) == bytes.fromhex("f4f7fa"), "Password mask not drawn"
+                        click(280, 410); type_text("axiomtest123!")
+                        click(280, 210); type_text("0Voix"); key("backspace"); type_text("d")
+                        key("tab"); key("shift-tab")
+                        click(500, 495)
+                        rejected = screenshot("invalid-name")
+                        assert pixel(rejected, 250, 524) == bytes.fromhex("ff667b"), "No specific validation message"
+                        assert pixel(rejected, 250, 475) == bytes.fromhex("315e97"), "Error overlaps the button"
+                        assert pixel(rejected, 265, 308) == bytes.fromhex("f4f7fa"), "Rejected form lost password"
+                        assert "first administrator account created" not in log.read_text()
+                        key("home"); key("delete")  # Correct 0Void to Void without retyping passwords.
+                        screenshot("filled")
+                        click(500, 495)
+                        wait_for("first administrator account created")
+                        time.sleep(1.5)
+                        position[:] = [512, 384]  # Each new form starts its pointer at the center.
+                        click(500, 450)
                     wait_for("[FORM] login ready")
                     position[:] = [512, 384]
                     click(280, 350); type_text("axiomtest123!")
@@ -142,6 +147,8 @@ def run(firmware, exercise=None):
                 if process.poll() is None:
                     process.terminate()
                     process.wait(timeout=5)
+                if log.exists():
+                    shutil.copyfile(log, saved_log)
     print(f"PASS: {firmware} mouse signup/login, caret, masks, editing and keyboard focus", flush=True)
 
 

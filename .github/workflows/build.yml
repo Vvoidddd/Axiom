@@ -24,6 +24,10 @@ jobs:
         run: make test-input
       - name: Check desktop file saves and terminal boundaries
         run: make test-desktop
+      - name: Check snapshot validation and interrupted saves
+        run: make test-snapshot test-checkpoint
+      - name: Check offline data-image backup and restore
+        run: python3 tests/data-disk.py
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}
