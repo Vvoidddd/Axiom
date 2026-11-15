@@ -22,6 +22,7 @@ run_case(){
  echo "PASS: $name"
 }
 mode=${2:-all}
+case $mode in all|bios-commands|uefi-commands|bios-storage|uefi-storage|bios-fault|uefi-fault) ;; *) echo "Unknown smoke-test mode: $mode" >&2; exit 2;; esac
 [[ $mode == all || $mode == bios-commands ]]&&run_case bios-commands bios 'script demo'
 [[ $mode == all || $mode == uefi-commands ]]&&run_case uefi-commands uefi 'script demo'
 [[ $mode == all || $mode == bios-storage ]]&&run_case bios-storage bios storagetest

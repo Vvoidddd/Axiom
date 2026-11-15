@@ -15,7 +15,7 @@ out.mkdir(parents=True, exist_ok=True)
 ovmf = os.environ.get("OVMF", "/usr/share/OVMF/OVMF_CODE.fd")
 
 
-def run(firmware):
+def run(firmware, exercise=None):
     log = out / f"{firmware}.log"
     with tempfile.TemporaryDirectory() as tmp:
         address = str(Path(tmp) / "qmp")
@@ -132,6 +132,9 @@ def run(firmware):
                     wait_for("launching user-space init and shell")
                     time.sleep(1)
                     screenshot("terminal")
+                    if exercise:
+                        position[:] = [512, 384]
+                        exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, position, log)
                     assert "[ERROR]" not in log.read_text()
                     qmp("quit")
                     process.wait(timeout=5)
@@ -142,5 +145,6 @@ def run(firmware):
     print(f"PASS: {firmware} mouse signup/login, caret, masks, editing and keyboard focus", flush=True)
 
 
-for mode in ("bios", "uefi"):
-    run(mode)
+if __name__ == "__main__":
+    for mode in ("bios", "uefi"):
+        run(mode)

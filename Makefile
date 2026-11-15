@@ -116,6 +116,11 @@ test-input: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -I$(LIMINE) tests/input.c src/form.c src/mouse.c src/framebuffer.c src/account.c -o $(BUILD)/input-test
 	$(BUILD)/input-test
 
+.PHONY: test-desktop
+test-desktop: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Isdk/include -I$(LIMINE) tests/desktop.c src/desktop.c src/console.c src/framebuffer.c src/form.c src/vfs.c -o $(BUILD)/desktop-test-host
+	$(BUILD)/desktop-test-host
+
 clean:
 	rm -rf $(BUILD)/obj $(BUILD)/user $(KERNEL) $(ISO) $(ISO_ROOT)
 

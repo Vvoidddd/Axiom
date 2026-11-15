@@ -22,6 +22,8 @@ jobs:
         run: make test-vfs
       - name: Check text input and mouse decoding
         run: make test-input
+      - name: Check desktop file saves and terminal boundaries
+        run: make test-desktop
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}

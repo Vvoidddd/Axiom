@@ -7,6 +7,12 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Open a first mouse-driven desktop after login with wallpaper, an app panel, and F1-F5 app shortcuts.
+- [x] Keep the ring-3 terminal in a bounded window with scrolling and retained output when hidden.
+- [x] Browse permitted VFS directories and open small text files from a graphical file browser.
+- [x] Edit bounded ASCII documents and save new home-folder copies without overwriting existing files; retain drafts on save failure.
+- [x] Add desktop wallpaper/keyboard controls and lock/logout buttons with an unsaved-draft guard.
+
 - [x] Create a freestanding x86-64 C kernel and linker layout.
 - [x] Boot through pinned Limine v12 on legacy BIOS and UEFI.
 - [x] Produce a hybrid ISO with the `./all` clean-build workflow.
@@ -163,8 +169,8 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 - [ ] Create a compositor/window server in user space with windows, layers, and focus.
 - [ ] Define an app-to-window-server IPC protocol and reusable GUI toolkit.
 - [ ] Add scalable fonts, Unicode text shaping basics, icons, themes, and DPI handling.
-- [ ] Build a desktop shell with wallpaper, panel, launcher, notifications, and settings.
-- [ ] Build core apps: terminal, file manager, text editor, image viewer, and system monitor.
+- [ ] Extend the initial desktop with notifications, a general application launcher, and full graphical system settings.
+- [ ] Extend the initial terminal, file browser, and editor into independent app windows; add an image viewer and system monitor.
 - [ ] Add clipboard, drag and drop, keyboard shortcuts, accessibility, and screen capture.
 - [ ] Preserve a text-only recovery mode when graphics or user space fails.
 
@@ -197,7 +203,11 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 
 ## Current Next Milestone
 
-Phase 3B now has seven of twelve items complete. Next are software/package
-lifecycle, backup/restore, recovery modes, compatibility policy, and the full
-blank-disk/upgrade/failure installation test matrix. Desktop graphics remain
-Phase 4 work.
+The first Phase 4 desktop preview is available alongside the unfinished Phase
+3B work. It uses the boot framebuffer and a kernel-hosted single-app interface;
+it does not complete the user-space compositor or GUI toolkit milestones.
+Next priorities for everyday usability are safe persistent installation and
+recovery, followed by independent desktop application windows and richer apps.
+Software/package lifecycle, backup/restore, compatibility policy, and the full
+blank-disk/upgrade/failure test matrix also remain open. Live-session files and
+accounts are still RAM-backed and disappear on reboot.

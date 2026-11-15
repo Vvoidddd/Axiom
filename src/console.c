@@ -8,19 +8,23 @@
 #define CELL_H 18u
 
 static uint64_t col, row, cols, rows;
+static uint64_t origin_x,origin_y;
+static bool visible=true;
+/* ponytail: bounded character backing store; replace with surfaces for a compositor. */
+static char cells[80][160];
 
 static void redraw_cell(uint64_t x, uint64_t y, char c, uint32_t colour) {
-    fb_rect(x * CELL_W, y * CELL_H, CELL_W, CELL_H, BG);
+    if(!visible)return;
+    fb_pointer_hide();
+    fb_rect(origin_x+x * CELL_W, origin_y+y * CELL_H, CELL_W, CELL_H, BG);
     char s[2] = {c, 0};
-    fb_text(x * CELL_W, y * CELL_H + 2, s, colour, 2);
+    fb_text(origin_x+x * CELL_W, origin_y+y * CELL_H + 2, s, colour, 2);
 }
 
 static void scroll(void) {
-    struct limine_framebuffer *info = fb_info();
-    uint64_t bytes = (info->height - CELL_H) * info->pitch;
-    unsigned char *base = info->address;
-    for (uint64_t i = 0; i < bytes; i++) base[i] = base[i + CELL_H * info->pitch];
-    fb_rect(0, info->height - CELL_H, info->width, CELL_H, BG);
+    for(uint64_t y=1;y<rows;y++)for(uint64_t x=0;x<cols;x++)cells[y-1][x]=cells[y][x];
+    for(uint64_t x=0;x<cols;x++)cells[rows-1][x]=0;
+    console_redraw();
     row = rows - 1;
 }
 
@@ -30,17 +34,38 @@ void console_init(void) {
 }
 
 void console_prepare(void) {
-    cols = fb_width() / CELL_W;
-    rows = fb_height() / CELL_H;
+    visible=true;
+    console_viewport(0,0,fb_width(),fb_height());
+}
+void console_viewport(uint64_t x,uint64_t y,uint64_t width,uint64_t height){
+    origin_x=x;origin_y=y;
+    cols=width/CELL_W;rows=height/CELL_H;
+    if(cols>160)cols=160;
+    if(rows>80)rows=80;
     if(!cols)cols=1;
     if(!rows)rows=1;
+    if(col>=cols)col=0;
+    if(row>=rows)row=rows-1;
 }
 
-void console_clear(void) { fb_clear(BG); col = 0; row = 0; }
+void console_visible(bool value){visible=value;}
+void console_redraw(void){
+    if(!visible)return;
+    fb_pointer_hide();fb_rect(origin_x,origin_y,cols*CELL_W,rows*CELL_H,BG);
+    for(uint64_t y=0;y<rows;y++)for(uint64_t x=0;x<cols;x++)if(cells[y][x])redraw_cell(x,y,cells[y][x],cells[y][x]=='>'?ACCENT:FG);
+}
+void console_clear(void) {
+    for(unsigned y=0;y<80;y++)for(unsigned x=0;x<160;x++)cells[y][x]=0;
+    col=0;row=0;console_redraw();
+}
 
 void console_putc(char c) {
+    if(c=='\b'){console_backspace();return;}
+    if(c=='\r'){col=0;return;}
     if (c == '\n') { col = 0; row++; }
     else {
+        if((unsigned char)c<32)return;
+        cells[row][col]=c;
         redraw_cell(col, row, c, c == '>' ? ACCENT : FG);
         if (++col >= cols) { col = 0; row++; }
     }
@@ -52,6 +77,7 @@ void console_write(const char *text) { while (*text) console_putc(*text++); }
 void console_backspace(void) {
     if (col == 0) { if(row==0)return;row--;col=cols-1; }
     else col--;
+    cells[row][col]=0;
     redraw_cell(col, row, ' ', FG);
 }
 

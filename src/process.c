@@ -1,3 +1,4 @@
+#include "desktop.h"
 #include "process.h"
 #include "hardware.h"
 #include "memory.h"
@@ -144,7 +145,7 @@ bool process_syscall_interrupt(uint64_t*f){
     if(number==SYS_SLEEP){if(f[9]>10000){f[14]=(uint64_t)-22;return true;}f[14]=0;table[current_slot].frame[14]=0;table[current_slot].info.wake_tick=hardware_uptime_ms()+f[9];table[current_slot].info.state=PROCESS_SLEEPING;scheduler_sleeps++;switch_user_frame(f,false);return true;}
     if(number==SYS_YIELD){f[14]=0;switch_user_frame(f,true);return true;}
     if(number==SYS_WRITE){size_t size=(size_t)f[8];if(size>4096||!vmm_space_user_range_valid(&table[current_slot].image.space,f[9],size,false)){f[14]=(uint64_t)-14;return true;}const char*text=(const char*)(uintptr_t)f[9];for(size_t i=0;i<size;i++)console_putc(text[i]);f[14]=size;return true;}
-    if(number==SYS_KEY_POLL){struct key_event event;f[14]=keyboard_poll_event(&event)&&event.pressed&&event.character?(uint8_t)event.character:0;return true;}
+    if(number==SYS_KEY_POLL){if(desktop_active()){f[14]=desktop_poll();return true;}struct key_event event;f[14]=keyboard_poll_event(&event)&&event.pressed&&event.character?(uint8_t)event.character:0;return true;}
     if(number==SYS_COMMAND){char line[128];if(!copy_user_string(f[9],line,sizeof(line))){f[14]=(uint64_t)-14;return true;}kernel_execute_user_command(line);f[14]=0;return true;}
     if(number==SYS_SPAWN){char path[128];if(!copy_user_string(f[9],path,sizeof(path))){f[14]=(uint64_t)-14;return true;}if(!vfs_can_access(path,VFS_EXECUTE)){account_audit("permission-denied",path);f[14]=(uint64_t)-13;return true;}struct vfs_stat st;if(vfs_stat_path(path,&st)){f[14]=(uint64_t)-2;return true;}struct user_image image;if(elf_load_vfs(path,&image)){f[14]=(uint64_t)-8;return true;}struct process_info*parent=&table[current_slot].info;int child=create_user_process(path,&image,parent->real_uid,parent->real_gid);if(child<0){f[14]=(uint64_t)child;return true;}table[child].info.parent_pid=parent->pid;table[child].info.effective_uid=(st.mode&04000)?st.uid:parent->effective_uid;table[child].info.saved_uid=table[child].info.effective_uid;table[child].info.effective_gid=(st.mode&02000)?st.gid:parent->effective_gid;table[child].info.saved_gid=table[child].info.effective_gid;table[child].info.capabilities=parent->capabilities;table[child].info.capability_expiry_ms=parent->capability_expiry_ms;f[14]=table[child].info.pid;log_write("SPAWN",path);return true;}
     if(number==SYS_SERVICE_HEARTBEAT){if(!table[current_slot].system_task){f[14]=(uint64_t)-13;return true;}service_heartbeat(table[current_slot].info.pid,hardware_uptime_ms());f[14]=0;return true;}

@@ -92,6 +92,32 @@ make run-uefi
 On distributions with a different OVMF path, edit the firmware path in the
 `run-uefi` target or invoke QEMU directly.
 
+## Desktop preview
+
+After signing in, Axiom opens a mouse-driven desktop with wallpaper and a bottom
+app panel. Click an app or use F1 Home, F2 Terminal, F3 Files, F4 Editor, and F5
+Settings. Typing on Home also opens Terminal. The X button hides the current
+app; terminal output and the editor draft remain available when you return.
+
+- **Terminal:** the existing ring-3 shell in a bounded, scrolling window.
+- **Files:** browse your home or the root tree, enter folders, and open small
+  text files. Up/Down selects entries, Enter opens them, and Backspace goes up.
+- **Editor:** edit ASCII text under 4096 bytes using Left/Right, Home/End,
+  Backspace/Delete, and Enter. Save copy creates the next available
+  `note-N.txt` in your home, preserving existing files. Save failures retain the
+  draft. Save before opening another file or ending the session.
+- **Settings:** switch wallpaper colors and choose US/Dvorak keyboard layouts.
+- **Lock / Log out:** return to login. Panel actions ask for a second click if
+  the editor has an unsaved draft. Terminal session commands retain their
+  immediate behavior, so save your draft first.
+
+This is a first framebuffer desktop with one visible app at a time, hosted in
+the kernel around the ring-3 shell. A user-space compositor, independent app
+windows, notifications, image viewer, and system monitor remain on the roadmap.
+The desktop requires at least 960x600; smaller framebuffers keep the console.
+**Files and accounts are still RAM-backed and do not survive reboot.** This
+build is a live desktop preview, not a persistent installed daily-use OS.
+
 ## Console
 
 The console supports a fixed 127-character input line, backspace, wrapping,
@@ -202,6 +228,7 @@ Run the host VFS regression check with address and undefined-behavior sanitizers
 ```sh
 make test-vfs
 make test-input
+make test-desktop
 ```
 
 It checks immutable trees, read-only mounts, aliases, metadata, open descriptors,
@@ -214,6 +241,7 @@ on BIOS and UEFI. It saves framebuffer screenshots and serial logs:
 
 ```sh
 python3 tests/account-input.py build/axiom.iso
+python3 tests/desktop.py build/axiom.iso build/desktop-test
 ```
 
 Set `OVMF` if your firmware is not at `/usr/share/OVMF/OVMF_CODE.fd`.

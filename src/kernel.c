@@ -1,3 +1,4 @@
+#include "desktop.h"
 #include "form.h"
 #include <stdbool.h>
 #include <stddef.h>
@@ -486,9 +487,11 @@ void kmain(void) {
     for(;;){
         graphical_login();
         console_init();
+        desktop_start();
         LOG_INFO("launching user-space init and shell");
         LOG_INFO("session processes inherit authenticated credentials");
         int status=process_launch_init();
+        desktop_stop();
         config_user_end();
         account_end_session();
         if(status<0){LOG_ERROR("user-space init failed; entering kernel recovery console");console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");shell();}
