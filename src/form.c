@@ -2,6 +2,20 @@
 #include "framebuffer.h"
 #include "mouse.h"
 #include "log.h"
+#include "account.h"
+
+enum form_error form_validate_setup(const char*name,const char*password,const char*confirmation){
+    if(!account_name_valid(name))return FORM_NAME;
+    size_t n=0;while(password&&password[n])n++;
+    if(n<8||n>72)return FORM_PASSWORD;
+    if(!confirmation)return FORM_CONFIRM;
+    for(size_t i=0;i<=n;i++)if(password[i]!=confirmation[i])return FORM_CONFIRM;
+    return FORM_VALID;
+}
+void form_message(const char*message){
+    fb_pointer_hide();fb_rect(250,520,524,24,0x101318);
+    fb_text(250,524,message,0xff667b,2);
+}
 
 bool form_edit(struct form_field*f,const struct key_event*e){
     if(!f||!e||!f->text||!f->capacity||!e->pressed)return false;
@@ -87,6 +101,14 @@ void account_form(bool setup,char name[32],char password[73],char confirmation[7
         if(submit){
             bool complete=true;
             for(unsigned i=0;i<count;i++)if(!fields[i].length){active=i;complete=false;dirty=true;break;}
+            if(!complete)form_message("Fill in every field.");
+            if(complete&&setup){
+                enum form_error error=form_validate_setup(name,password,confirmation);
+                if(error!=FORM_VALID){
+                    static const char*messages[]={"","Name: 2-31 letters, hyphens, then digits.","Password must be 8-72 characters.","Passwords do not match."};
+                    form_message(messages[error]);active=(unsigned)error-1;complete=false;dirty=true;
+                }
+            }
             if(complete){fb_pointer_hide();return;}
         }
         bool caret=((hardware_uptime_ms()-blink_start)/500)%2==0;

@@ -89,6 +89,7 @@ tests on both BIOS and UEFI.
 - [x] Add PS/2 mouse input and clickable account setup, login, and recovery-key acknowledgement.
 - [x] Show full account forms with a blinking caret, focus borders, password masks, keyboard navigation, and bounded text editing.
 - [x] Preserve service heartbeat age across lock/login pauses so unlocking does not restart healthy services.
+- [x] Accept mixed-case account names and show specific signup validation errors without clearing fields or covering buttons.
 
 ## Phase 1: Stable Terminal Kernel — Completed
 

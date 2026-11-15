@@ -10,6 +10,14 @@ static void edit(struct form_field*f,char c,uint8_t special){
     form_edit(f,&key);
 }
 int main(void){
+    assert(form_validate_setup("Void","valid-password","valid-password")==FORM_VALID);
+    assert(form_validate_setup("v0id-user","valid-password","valid-password")==FORM_VALID);
+    assert(form_validate_setup("bad/name","valid-password","valid-password")==FORM_NAME);
+    assert(form_validate_setup("0name","valid-password","valid-password")==FORM_NAME);
+    assert(form_validate_setup("v","valid-password","valid-password")==FORM_NAME);
+    assert(form_validate_setup("Void","short","short")==FORM_PASSWORD);
+    assert(form_validate_setup("Void","valid-password","different")==FORM_CONFIRM);
+    assert(form_validate_setup("Void","valid-password","")==FORM_CONFIRM);
     char text[5]="";struct form_field field={.text=text,.capacity=sizeof(text)};
     edit(&field,'a',0);edit(&field,'c',0);edit(&field,0,KEY_LEFT);edit(&field,'b',0);
     assert(!strcmp(text,"abc")&&field.cursor==2);

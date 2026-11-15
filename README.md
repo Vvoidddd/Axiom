@@ -41,6 +41,11 @@ recovery-key acknowledgement also has a clickable Continue button. Keyboard
 navigation remains available when no PS/2 mouse is detected; USB HID support
 is still on the roadmap.
 
+Usernames accept uppercase and lowercase letters, hyphens, and digits after
+the first character (2-31 characters total). Names remain case-sensitive:
+sign in as `Void` if that is the name you created. Setup retains entered fields
+when validation fails and displays errors below the Create Account button.
+
 ## Build on Windows with Arch WSL
 
 Install the build and emulator dependencies inside Arch WSL:

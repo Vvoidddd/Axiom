@@ -9,6 +9,7 @@ enum account_type {ACCOUNT_STANDARD,ACCOUNT_ADMIN,ACCOUNT_SERVICE,ACCOUNT_RECOVE
 struct account_info {uint32_t uid,gid,creation_mask;enum account_type type;bool enabled,configured;char name[32],home[64],path[96],locale[16],timezone[32],startup[64];};
 struct group_info {uint32_t gid,member_count;char name[32];uint32_t members[ACCOUNT_MAX];};
 void account_init(void);
+bool account_name_valid(const char *name);
 int account_create(const char *name,const char *password,enum account_type type,uint32_t *uid);
 int account_create_service(const char *name,uint32_t *uid);
 int account_authenticate(const char *name,const char *password,uint64_t now_ms);

@@ -66,7 +66,7 @@ def run(firmware):
 
                     def type_text(text):
                         for char in text:
-                            key("shift-1" if char == "!" else char)
+                            key("shift-1" if char == "!" else "shift-" + char.lower() if char.isupper() else char)
 
                     position = [512, 384]
 
@@ -107,8 +107,15 @@ def run(firmware):
                     masked = screenshot("password")
                     assert pixel(masked, 265, 308) == bytes.fromhex("f4f7fa"), "Password mask not drawn"
                     click(280, 410); type_text("axiomtest123!")
-                    click(280, 210); type_text("cursoradmix"); key("backspace"); type_text("n")
+                    click(280, 210); type_text("0Voix"); key("backspace"); type_text("d")
                     key("tab"); key("shift-tab")
+                    click(500, 495)
+                    rejected = screenshot("invalid-name")
+                    assert pixel(rejected, 250, 524) == bytes.fromhex("ff667b"), "No specific validation message"
+                    assert pixel(rejected, 250, 475) == bytes.fromhex("315e97"), "Error overlaps the button"
+                    assert pixel(rejected, 265, 308) == bytes.fromhex("f4f7fa"), "Rejected form lost password"
+                    assert "first administrator account created" not in log.read_text()
+                    key("home"); key("delete")  # Correct 0Void to Void without retyping passwords.
                     screenshot("filled")
                     click(500, 495)
                     wait_for("first administrator account created")
@@ -118,7 +125,7 @@ def run(firmware):
                     wait_for("[FORM] login ready")
                     position[:] = [512, 384]
                     click(280, 350); type_text("axiomtest123!")
-                    click(280, 250); type_text("cursoradmin")
+                    click(280, 250); type_text("Void")
                     screenshot("login")
                     click(500, 450)
                     wait_for("graphical login successful")
