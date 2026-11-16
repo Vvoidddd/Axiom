@@ -95,9 +95,15 @@ On distributions with a different OVMF path, edit the firmware path in the
 ## Desktop preview
 
 After signing in, Axiom opens a mouse-driven desktop with wallpaper and a bottom
-app panel. Click an app or use F1 Home, F2 Terminal, F3 Files, F4 Editor, and F5
-Settings. Typing on Home also opens Terminal. The X button hides the current
+app panel. Desktop icons open Terminal, Files, Editor, Settings, and Task Manager
+with one click. Tab/Shift+Tab or arrows select an icon; Enter/Space opens it.
+Use F1 Home, F2 Terminal, F3 Files, F4 Editor, F5 Settings, and F7 Task Manager.
+Typing on Home also opens Terminal. The X button hides the current
 app; terminal output and the editor draft remain available when you return.
+
+The normal build and boot workflow uses **`axiom.iso` only**. Run `./all` and
+keep your VM pointed at that file. No additional data disk is required to use
+the desktop; the persistence setup below is optional.
 
 - **Terminal:** the existing ring-3 shell in a bounded, scrolling window.
 - **Files:** browse your home or the root tree, enter folders, and open small
@@ -107,13 +113,17 @@ app; terminal output and the editor draft remain available when you return.
   `note-N.txt` in your home, preserving existing files. Save failures retain the
   draft. Save before opening another file or ending the session.
 - **Settings:** switch wallpaper colors and choose US/Dvorak keyboard layouts.
+- **Task Manager:** a live read-only process monitor with PID/TID, owner, state,
+  scheduler ticks, free RAM, kernel heap use, and uptime. It refreshes every
+  second and honors the same process-visibility permissions as `ps`. Scroll
+  with Up/Down. Task termination remains a later feature.
 - **Lock / Log out:** return to login. Panel actions ask for a second click if
   the editor has an unsaved draft. Terminal session commands retain their
   immediate behavior, so save your draft first.
 
 This is a first framebuffer desktop with one visible app at a time, hosted in
 the kernel around the ring-3 shell. A user-space compositor, independent app
-windows, notifications, image viewer, and system monitor remain on the roadmap.
+windows, notifications, and an image viewer remain on the roadmap.
 The desktop requires at least 960x600; smaller framebuffers keep the console.
 Without a prepared data disk, files and accounts remain RAM-backed and disappear
 on reboot. With one, committed state survives booting the ISO again. This is
@@ -135,8 +145,8 @@ VMDK as an existing **SATA** disk with the VM powered off. Use a new output name
 when converting; do not overwrite a previously used data disk. QEMU BIOS/UEFI
 is tested; VMware compatibility still needs a real VMware validation run.
 
-The desktop displays **PERSISTENT DATA DISK** when enabled. Click Save, press F6,
-or enter `save` in Terminal before powering off the VM. Editor Save copy and
+When persistence is enabled, press F6 or enter `save` in Terminal before
+powering off the VM. Editor Save copy and
 coordinated `shutdown`/`reboot` also checkpoint. Only committed files survive an
 unexpected power loss; an unsaved editor buffer is not a file. Initial account
 setup is checkpointed after recovery-key acknowledgement. Keep that key offline.

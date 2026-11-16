@@ -5,6 +5,7 @@
 #include "mouse.h"
 #include "vfs.h"
 #include "account.h"
+#include "process.h"
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -14,10 +15,18 @@ static struct key_event key;
 static struct mouse_event mouse;
 static bool has_key,has_mouse;
 static int px=512,py=384;
+static uint64_t clock_ms=1000;
 static const struct account_info user={.uid=1,.gid=1,.name="test",.home="/users/test"};
 void *kmalloc(size_t n){return malloc(n);}
 void kfree(void*p){free(p);}
-uint64_t hardware_uptime_ms(void){return 1000;}
+uint64_t hardware_uptime_ms(void){return clock_ms;}
+uint64_t pmm_free_pages(void){return 16384;}
+uint64_t heap_bytes_used(void){return 4096;}
+uint32_t process_count(void){return 2;}
+bool process_info_at(uint32_t i,struct process_info*p){if(i>=2)return false;*p=(struct process_info){.pid=i+1,.tid=i+1,.real_uid=i+1,.state=PROCESS_READY,.runtime_ticks=clock_ms};strcpy(p->name,i?"PRIVATE":"owner");return true;}
+const char*process_state_name(enum process_state state){(void)state;return "ready";}
+bool process_current_identity(uint32_t*r,uint32_t*e,uint32_t*g){if(r)*r=1;if(e)*e=1;if(g)*g=1;return true;}
+bool process_current_has_capability(uint64_t cap,uint64_t now){(void)cap;(void)now;return false;}
 const struct account_info *account_current(void){return &user;}
 void log_write(const char*a,const char*b){(void)a;(void)b;}
 const char *keyboard_layout_name(void){return "us";}
@@ -46,6 +55,16 @@ int main(void){
         .green_mask_size=8,.green_mask_shift=8,.blue_mask_size=8};
     assert(fb_init(&fb));vfs_init();assert(!vfs_mkdir(user.home,0700));assert(!vfs_chown(user.home,1,1));
     vfs_set_credentials(1,1);console_init();desktop_start();assert(desktop_active());
+    click(100,570); // Desktop Task Manager icon.
+    fb_pointer_hide();
+    for(unsigned y=256;y<270;y++)for(unsigned x=52;x<960;x++)assert(pixels[y*1024+x]==0x101318); // Other user's row absent.
+    uint32_t before[160*16];for(unsigned y=0;y<16;y++)memcpy(before+y*160,pixels+(230+y)*1024+462,160*4);
+    clock_ms+=1000;desktop_poll();fb_pointer_hide();
+    bool changed=false;for(unsigned y=0;y<16;y++)if(memcmp(before+y*160,pixels+(230+y)*1024+462,160*4))changed=true;
+    assert(changed); // Runtime ticks refresh without further input.
+    press(0,0x3b);key=(struct key_event){.pressed=true,.special=KEY_HOME};has_key=true;desktop_poll();
+    press('\t',0);press('\n',0); // Keyboard launches Files.
+    assert(pixels[728*1024+264]==0x315e97);
     press(0,0x3c); // F2
     for(unsigned i=0;i<200;i++)console_write("scrolling inside a desktop terminal\n");
     assert(pixels[0]==0x101c2a&&pixels[735*1024]==0x101c2a);
@@ -66,6 +85,8 @@ int main(void){
     contents("/users/test/note-3.txt","hello desktop\nsecond line!?");
     assert(click(830,745)==0x100);
     desktop_stop();assert(!desktop_active());
+    fb.height=600;assert(fb_init(&fb));desktop_start();px=512;py=300;click(100,470); // Last icon still fits at 600p.
+    assert(pixels[64*1024+32]==0x293b50);desktop_stop();
     vfs_set_credentials(0,0);assert(!vfs_unlink(user.home,true));free(pixels);
     puts("PASS: desktop file round trips, non-destructive saves, quota failure, draft guard and terminal clipping");
 }

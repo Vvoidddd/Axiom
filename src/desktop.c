@@ -9,24 +9,29 @@
 #include "form.h"
 #include "log.h"
 #include "checkpoint.h"
+#include "process.h"
+#include "memory.h"
+#include "security.h"
 #include <axiom/syscall.h>
 
-enum app {HOME,TERMINAL,FILES,EDITOR,SETTINGS};
+enum app {HOME,TERMINAL,FILES,EDITOR,SETTINGS,TASKS};
 static enum app app;
 static bool active,dirty,unsaved,confirm_exit;
 static int mx,my,width,height,wx,wy,ww,wh;
 static uint8_t buttons;
 static unsigned selected,first,count,total;
+static unsigned icon_focus,task_first,task_count;
+static uint64_t task_refresh;
 static char directory[256],status[96],document[4096];
 static struct form_field editor;
 static size_t editor_top;
 static uint32_t wallpaper=0x152d46;
 static struct {char name[48];bool directory;} entries[256];
-static const char *titles[]={"Desktop","Terminal","Files","Text editor","Settings"};
+static const char *titles[]={"Desktop","Terminal","Files","Text editor","Settings","Task Manager"};
 
 static size_t length(const char*s){size_t n=0;while(s[n])n++;return n;}
 static void copy(char*d,const char*s,size_t cap){size_t n=0;while(s[n]&&n+1<cap){d[n]=s[n];n++;}d[n]=0;}
-static void number(char*out,unsigned n){char b[12];unsigned k=0;do{b[k++]=(char)('0'+n%10);n/=10;}while(n);unsigned i=0;while(k)out[i++]=b[--k];out[i]=0;}
+static void number(char*out,uint64_t n){char b[20];unsigned k=0;do{b[k++]=(char)('0'+n%10);n/=10;}while(n);unsigned i=0;while(k)out[i++]=b[--k];out[i]=0;}
 static void message(const char*s){copy(status,s,sizeof(status));dirty=true;}
 static bool inside(int x,int y,int w,int h){return mx>=x&&mx<x+w&&my>=y&&my<y+h;}
 static void text(int x,int y,const char*s,uint32_t color){fb_text(x,y,s,color,2);}
@@ -44,6 +49,8 @@ static void refresh(void){
 static void switch_app(enum app next){
     app=next;confirm_exit=false;console_visible(app==TERMINAL);
     if(app==FILES)refresh();
+    else if(app==TASKS){task_first=0;task_refresh=0;message("Read-only monitor. UP / DOWN scroll. CPU time is scheduler ticks.");}
+    else status[0]=0;
     dirty=true;log_write("DESKTOP",titles[app]);
 }
 static void home_path(void){const struct account_info*u=account_current();copy(directory,u?u->home:"/",sizeof(directory));}
@@ -107,26 +114,67 @@ static void draw_editor(void){
     }
     fb_rect(wx+20+caret_col*12,wy+88+(caret_row-editor_top)*18,2,18,0x8bc3ff);
 }
+static int icon_step(void){int step=(height-128)/5;return step<118?step:118;}
+static void draw_icon(unsigned i){
+    int x=48,y=64+(int)i*icon_step();enum app target=(enum app)(i+1);
+    fb_rect(x-12,y-8,156,icon_step()-4,app==HOME&&icon_focus==i?0x294963:wallpaper);
+    uint32_t ink=0x8bc3ff;
+    if(target==TERMINAL){fb_rect(x+28,y,64,46,0x101318);fb_rect(x+28,y,64,6,ink);fb_text(x+36,y+16,">_",0x91d6b0,2);}
+    else if(target==FILES){fb_rect(x+28,y+8,26,10,0xffcf7b);fb_rect(x+24,y+16,72,38,0xe8b55d);fb_rect(x+28,y+22,64,28,0xffcf7b);}
+    else if(target==EDITOR){fb_rect(x+36,y,48,56,0xe8edf2);for(int j=0;j<4;j++)fb_rect(x+44,y+12+j*10,30,3,0x53758b);}
+    else if(target==SETTINGS){for(int j=0;j<3;j++){fb_rect(x+28,y+10+j*16,64,3,ink);fb_rect(x+40+j*14,y+5+j*16,8,13,0xf4f7fa);}}
+    else {fb_rect(x+26,y,68,54,0x101318);for(int j=0;j<4;j++)fb_rect(x+34+j*14,y+40-j*8,8,8+j*8,0x91d6b0);}
+    text(x,y+68,target==EDITOR?"Editor":target==TASKS?"Task Manager":titles[target],0xf4f7fa);
+}
+static void metric(int x,int y,const char*label,uint64_t value){
+    char digits[21];number(digits,value);
+    text(x,y,label,0x9eb4ca);text(x,y+24,digits,0xf4f7fa);
+}
+static void task_cell(int x,int y,const char*s,int available,uint32_t color){fb_text(x,y,s,color,length(s)*12<=(unsigned)available?2:1);}
+static unsigned task_rows(void){return (unsigned)(wh-214)/26;}
+static void draw_tasks(void){
+    metric(wx+20,wy+52,"Free RAM MiB",pmm_free_pages()/256);
+    metric(wx+248,wy+52,"Heap KiB",heap_bytes_used()/1024);
+    metric(wx+476,wy+52,"Uptime seconds",hardware_uptime_ms()/1000);
+    text(wx+20,wy+132,"PID",0x8bc3ff);text(wx+100,wy+132,"TID",0x8bc3ff);
+    text(wx+180,wy+132,"UID",0x8bc3ff);text(wx+280,wy+132,"STATE",0x8bc3ff);
+    text(wx+430,wy+132,"TICKS",0x8bc3ff);text(wx+590,wy+132,"NAME",0x8bc3ff);
+    uint32_t own;if(!process_current_identity(&own,0,0))return;
+    bool audit=process_current_has_capability(CAP_AUDIT,hardware_uptime_ms());
+    struct process_info visible[PROCESS_MAX];task_count=0;
+    for(unsigned i=0;i<process_count()&&i<PROCESS_MAX;i++){
+        struct process_info p;if(process_info_at(i,&p)&&(audit||p.real_uid==own))visible[task_count++]=p;
+    }
+    unsigned rows=task_rows();if(task_first>=task_count)task_first=task_count?task_count-1:0;
+    for(unsigned i=task_first;i<task_count&&i<task_first+rows;i++){
+        const struct process_info*p=&visible[i];int y=wy+166+(int)(i-task_first)*26;char b[33];
+        number(b,p->pid);task_cell(wx+20,y,b,76,0xf4f7fa);
+        number(b,p->tid);task_cell(wx+100,y,b,76,0xf4f7fa);
+        number(b,p->real_uid);task_cell(wx+180,y,b,96,0xf4f7fa);
+        task_cell(wx+280,y,process_state_name(p->state),146,p->state==PROCESS_ZOMBIE?0x8995a3:0x91d6b0);
+        number(b,p->runtime_ticks);task_cell(wx+430,y,b,156,0xf4f7fa);
+        copy(b,p->name,sizeof(b));task_cell(wx+590,y,b,ww-610,0xf4f7fa);
+    }
+    if(!task_count)text(wx+20,wy+166,"No visible processes.",0x8995a3);
+    task_refresh=hardware_uptime_ms();
+}
 static void draw(void){
     fb_pointer_hide();fb_clear(wallpaper);
     fb_rect(width*2/3,38,width/3,height-86,0x1b3954);
     fb_rect(0,0,width,38,0x101c2a);
     text(20,12,"AXIOM",0xf4f7fa);
     const struct account_info*u=account_current();text(140,12,u?u->name:"Session",0x9eb4ca);
-    text(width-312,12,"F1: DESKTOP  F2: TERMINAL",0x9eb4ca);
+    text(width-312,12,"F1: DESKTOP  F7: TASKS",0x9eb4ca);
     fb_rect(0,height-48,width,48,0x101c2a);
     const char*labels[]={"Home","Terminal","Files","Editor","Settings"};
     for(unsigned i=0;i<5;i++)button(12+(int)i*126,height-40,118,labels[i],app==(enum app)i);
     button(width-240,height-40,100,"Lock",false);button(width-128,height-40,116,"Log out",false);
-    button(width-326,height-40,76,"Save",false);
+    button(width-326,height-40,76,"Tasks",app==TASKS);
     if(app==HOME){
-        fb_text(64,130,"AXIOM",0xf4f7fa,8);
-        text(68,210,"Your system. Your rules.",0xa9c5df);
-        text(68,280,"Open an app from the panel below.",0xf4f7fa);
-        text(68,316,"F2 Terminal   F3 Files   F4 Editor   F5 Settings",0xa9c5df);
-        text(68,380,checkpoint_active()?"PERSISTENT DATA DISK":"LIVE SESSION",0xffcf7b);
-        text(68,410,checkpoint_active()?"Save commits your files and accounts to disk.":"Files and accounts are RAM-backed in this build.",0xa9c5df);
-        text(68,440,checkpoint_active()?"Use Save / F6 before powering off the VM.":"They do not survive a reboot.",0xa9c5df);
+        for(unsigned i=0;i<5;i++)draw_icon(i);
+        fb_text(width/2-60,230,"AXIOM",0xf4f7fa,8);
+        text(width/2-56,310,"Your system. Your rules.",0xa9c5df);
+        text(240,height-100,"Click an icon or use TAB / arrows and ENTER.",0xa9c5df);
     }else{
         fb_rect(wx+6,wy+6,ww,wh,0x0b1826);fb_rect(wx,wy,ww,wh,0x101318);
         fb_rect(wx,wy,ww,34,0x293b50);text(wx+14,wy+10,titles[app],0xf4f7fa);
@@ -143,6 +191,7 @@ static void draw(void){
             }
         }
         if(app==EDITOR)draw_editor();
+        if(app==TASKS)draw_tasks();
         if(app==SETTINGS){
             text(wx+24,wy+65,"APPEARANCE",0x9eb4ca);
             button(wx+24,wy+98,150,"Ocean",wallpaper==0x152d46);button(wx+190,wy+98,150,"Slate",wallpaper==0x242936);
@@ -161,7 +210,7 @@ void desktop_start(void){
     width=(int)fb_width();height=(int)fb_height();
     if(width<960||height<600){active=false;console_init();return;}
     active=true;wx=32;wy=64;ww=width-64;wh=height-144;
-    mx=width/2;my=height/2;buttons=0;unsaved=confirm_exit=false;status[0]=document[0]=0;
+    mx=width/2;my=height/2;buttons=0;icon_focus=0;unsaved=confirm_exit=false;status[0]=document[0]=0;
     editor=(struct form_field){.text=document,.capacity=sizeof(document)};editor_top=0;
     home_path();console_viewport(wx+12,wy+44,ww-24,wh-56);console_clear();
     switch_app(HOME);draw();log_write("DESKTOP","session ready");
@@ -174,12 +223,12 @@ static long session_action(long action){
 }
 static long click(void){
     if(my>=height-48){
-        if(inside(width-326,height-40,76,32)){message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");if(app==HOME)switch_app(SETTINGS);return 0;}
+        if(inside(width-326,height-40,76,32)){switch_app(TASKS);return 0;}
         for(unsigned i=0;i<5;i++)if(inside(12+(int)i*126,height-40,118,32)){switch_app((enum app)i);return 0;}
         if(inside(width-240,height-40,100,32))return session_action(AXIOM_KEY_SESSION_LOCK);
         if(inside(width-128,height-40,116,32))return session_action(AXIOM_KEY_SESSION_LOGOUT);
     }
-    if(app==HOME)return 0;
+    if(app==HOME){for(unsigned i=0;i<5;i++)if(inside(36,56+(int)i*icon_step(),156,icon_step()-4)){icon_focus=i;switch_app((enum app)(i+1));break;}return 0;}
     if(inside(wx+ww-42,wy,42,34)){switch_app(HOME);return 0;}
     if(app==FILES){
         if(inside(wx+16,wy+44,78,32))parent_path();
@@ -209,9 +258,16 @@ long desktop_poll(void){
     struct key_event e;long value=0;
     if(keyboard_poll_event(&e)&&e.pressed){
         if(e.scancode>=0x3b&&e.scancode<=0x3f)switch_app((enum app)(e.scancode-0x3b));
-        else if(e.scancode==0x40){message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");if(app==HOME)switch_app(SETTINGS);}
+        else if(e.scancode==0x41)switch_app(TASKS);
+        else if(e.scancode==0x40){if(app==HOME||app==TERMINAL)switch_app(SETTINGS);message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");}
+        else if(app==HOME&&(e.special==KEY_HOME||e.special==KEY_END)){icon_focus=e.special==KEY_HOME?0:4;dirty=true;}
+        else if(app==HOME&&(e.character=='\t'||e.special==KEY_DOWN||e.special==KEY_UP||e.special==KEY_LEFT||e.special==KEY_RIGHT)){
+            bool back=e.special==KEY_UP||e.special==KEY_LEFT||(e.character=='\t'&&e.shift);icon_focus=(icon_focus+(back?4:1))%5;dirty=true;
+        }
+        else if(app==HOME&&(e.character=='\n'||e.character==' '))switch_app((enum app)(icon_focus+1));
         else if(app==HOME&&e.character>=32&&e.character<=126){switch_app(TERMINAL);value=(unsigned char)e.character;}
         else if(app==TERMINAL)value=(unsigned char)e.character;
+        else if(app==TASKS){if(e.special==KEY_UP&&task_first)task_first--;if(e.special==KEY_DOWN&&task_first+task_rows()<task_count)task_first++;dirty=true;}
         else if(app==FILES){
             if(e.special==KEY_DOWN&&selected+1<count)selected++;
             if(e.special==KEY_UP&&selected)selected--;
@@ -230,6 +286,7 @@ long desktop_poll(void){
             confirm_exit=false;
         }
     }
+    if(app==TASKS&&hardware_uptime_ms()-task_refresh>=1000)dirty=true;
     if(dirty)draw();else fb_pointer_show(mx,my);
     return value;
 }

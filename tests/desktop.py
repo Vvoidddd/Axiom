@@ -11,7 +11,17 @@ spec.loader.exec_module(harness)
 
 def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, position, log):
     wait_for("[DESKTOP] session ready")
-    assert pixel(screenshot("initial-home"), 40, 70) == bytes.fromhex("152d46"), "Login did not open Home"
+    assert pixel(screenshot("initial-home"), 40, 70) == bytes.fromhex("294963"), "No desktop icon focus"
+    click(100, 570)
+    wait_for("[DESKTOP] Task Manager")
+    tasks = screenshot("task-manager")
+    assert pixel(tasks, 32, 64) == bytes.fromhex("293b50"), "No Task Manager window"
+    time.sleep(1.2)
+    screenshot("task-manager-refresh")
+    key("f1"); key("home"); key("tab"); key("ret")
+    wait_for("[DESKTOP] Files")
+    key("f1"); click(100, 100)
+    wait_for("[DESKTOP] Terminal")
 
     def command(text):
         # The existing harness types simple names; commands also need spaces/slashes.
@@ -72,6 +82,10 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     # Existing VFS permissions remain in force, including sealed image writes.
     command("touch /system/desktop-test")
     chrome("sealed-write-denied")
+    click(725, 745)
+    screenshot("taskbar-tasks")
+    key("f1"); key("f7")
+    screenshot("shortcut-tasks")
     click(830, 745)
     wait_for("session locked; returning to login")
     wait_for("[FORM] login ready")
@@ -86,7 +100,7 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     chrome("unlocked")
     click(950, 745)
     wait_for("session logged out; returning to login")
-    print("PASS: desktop terminal, scrolling, apps, draft save, settings, lock and logout", flush=True)
+    print("PASS: desktop icons, keyboard launch, Task Manager, terminal, files, editor, settings and sessions", flush=True)
 
 
 def command_text(text, key):

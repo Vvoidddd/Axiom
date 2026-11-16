@@ -7,6 +7,9 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Add recognizable desktop launcher icons with mouse activation, keyboard focus, Tab/arrows, and Enter/Space navigation.
+- [x] Add a live graphical Task Manager showing permitted process rows, states, scheduler ticks, free RAM, heap use, and uptime, with taskbar and F7 access.
+
 - [x] Persist accounts, homes, configuration, logs, ownership, modes, timestamps, links, sparse pages, and quotas on an explicitly prepared SATA data disk.
 - [x] Commit bounded mutable-tree snapshots through two CRC-checked generations, flush the device before committing, and fall back to the prior valid generation.
 - [x] Validate and stage restored trees before replacing live state; preserve immutable system trees and reject corrupt data without overwriting the disk.
@@ -176,7 +179,8 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 - [ ] Define an app-to-window-server IPC protocol and reusable GUI toolkit.
 - [ ] Add scalable fonts, Unicode text shaping basics, icons, themes, and DPI handling.
 - [ ] Extend the initial desktop with notifications, a general application launcher, and full graphical system settings.
-- [ ] Extend the initial terminal, file browser, and editor into independent app windows; add an image viewer and system monitor.
+- [ ] Extend the initial terminal, file browser, editor, and Task Manager into independent app windows; add an image viewer.
+- [ ] Add safe task termination with ownership checks, protected system/session processes, and explicit unsaved-work handling.
 - [ ] Add clipboard, drag and drop, keyboard shortcuts, accessibility, and screen capture.
 - [ ] Preserve a text-only recovery mode when graphics or user space fails.
 
@@ -247,3 +251,11 @@ recorded in Completed. New phases do not imply that Phases 3B-7 are finished.
 - [ ] Add automated old-release data-image migration and rollback fixtures to CI, including corrupt and interrupted upgrades.
 - [ ] Build a user-approved diagnostic export that redacts credentials, recovery keys, and private file contents by default.
 - [ ] Publish reproducible release manifests, artifact hashes, compatibility notes, and a tested recovery procedure for each release.
+
+## Phase 11: Custom Axiom Bootloader
+
+- [ ] Specify a versioned kernel handoff for memory maps, framebuffer, ACPI, modules, and boot arguments, with bounded validation tests.
+- [ ] Build an Axiom UEFI loader that validates and loads ELF64 kernels and handles the ExitBootServices memory-map retry correctly.
+- [ ] Add a boot menu, recovery entries, and selectable known-good kernels; keep the existing Limine path available during development.
+- [ ] Test malformed kernels, missing files, unsupported graphics, low memory, and failed handoffs on OVMF before real firmware qualification.
+- [ ] Add a legacy BIOS loader only after the UEFI loader and recovery path pass the boot matrix.
