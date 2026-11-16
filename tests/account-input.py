@@ -13,7 +13,9 @@ import time
 iso = Path(sys.argv[1] if len(sys.argv) > 1 else "build/axiom.iso").resolve()
 out = Path(sys.argv[2] if len(sys.argv) > 2 else "build/account-input").resolve()
 out.mkdir(parents=True, exist_ok=True)
-ovmf = os.environ.get("OVMF", "/usr/share/OVMF/OVMF_CODE.fd")
+ovmf = os.environ.get("OVMF") or next((p for p in (
+    "/usr/share/OVMF/OVMF_CODE.fd", "/usr/share/OVMF/OVMF_CODE_4M.fd",
+    "/usr/share/edk2/x64/OVMF_CODE.fd") if Path(p).is_file()), "/usr/share/OVMF/OVMF_CODE.fd")
 
 
 def run(firmware, exercise=None, extra_args=(), existing=False):

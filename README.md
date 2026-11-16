@@ -215,6 +215,7 @@ and scrolling. Available commands are:
 - `proctest` — validate the Phase 3 process model and syscall ABI boundaries
 - `packages` — list validated system and application package manifests
 - `allocstat` and `heaptest` — inspect and test kernel memory management
+- `memfailtest` — inject physical-page allocation failures and verify rollback of heap, guarded-stack, MMIO, and page-table allocations without losing pages or virtual reservations
 - `time`, `uptime`, and `random` — show RTC, monotonic time, and entropy
 - `logs` — display the in-memory serial log history
 - `journal [LEVEL]` — read the rotated persistent journal, optionally filtered by level
@@ -289,6 +290,7 @@ Run the host VFS regression check with address and undefined-behavior sanitizers
 
 ```sh
 make test-vfs
+make test-vfs-atomic
 make test-input
 make test-desktop
 make test-snapshot
@@ -307,6 +309,7 @@ on BIOS and UEFI. It saves framebuffer screenshots and serial logs:
 ```sh
 python3 tests/account-input.py build/axiom.iso
 python3 tests/desktop.py build/axiom.iso build/desktop-test
+python3 tests/memory.py build/axiom.iso build/memory-test
 python3 tests/persistence.py build/axiom.iso build/persistence
 ```
 

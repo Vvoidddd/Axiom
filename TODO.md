@@ -7,6 +7,7 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Roll back partial kernel heap, guarded-stack, MMIO, and page-table allocations, including virtual reservations and empty lower-level tables; verify injected failures repeatedly on BIOS/UEFI.
 - [x] Add all-or-nothing VFS content replacement and an editor Save As flow with explicit overwrite confirmation; fault-test preservation of the old file and draft on failed saves.
 - [x] Roll back newly allocated VFS write pages on allocation failure; reject offset overflow, honor locks on existing descriptors, and make empty writes allocation-free.
 - [x] Add recognizable desktop launcher icons with mouse activation, keyboard focus, Tab/arrows, and Enter/Space navigation.
@@ -248,7 +249,7 @@ recorded in Completed. New phases do not imply that Phases 3B-7 are finished.
 
 - [ ] Run a documented VMware SATA/input/display test matrix and distinguish verified VMware versions from QEMU-only results.
 - [ ] Add VirtualBox and physical-machine smoke profiles with recorded CPU, firmware, storage, input, and graphics results.
-- [ ] Fix and fault-test partial page-allocation rollback before increasing snapshot or application memory limits.
+- [ ] Unwind partially loaded ELF images, failed thread creation, and partial shared-memory mappings; test process/address-space teardown before increasing application limits.
 - [ ] Add automated old-release data-image migration and rollback fixtures to CI, including corrupt and interrupted upgrades.
 - [ ] Build a user-approved diagnostic export that redacts credentials, recovery keys, and private file contents by default.
 - [ ] Publish reproducible release manifests, artifact hashes, compatibility notes, and a tested recovery procedure for each release.

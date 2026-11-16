@@ -22,6 +22,7 @@ void *vmm_map_mmio(uint64_t physical_address,size_t bytes);
 void *kmalloc(size_t size);
 void kfree(void *pointer);
 uint64_t heap_bytes_used(void);
+bool memory_allocation_self_test(void);
 void *pmm_direct_map(uint64_t physical);
 uint64_t pmm_physical_address(const void *virtual_address);
 #endif

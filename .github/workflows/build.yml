@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential curl xorriso
+        run: sudo apt-get update && sudo apt-get install -y build-essential curl xorriso qemu-system-x86 ovmf
       - name: Build Axiom
         run: ./all
       - name: Check VFS boundaries and failed-save rollback
@@ -28,6 +28,8 @@ jobs:
         run: make test-snapshot test-checkpoint
       - name: Check offline data-image backup and restore
         run: python3 tests/data-disk.py
+      - name: Check real page-table allocation rollback on BIOS and UEFI
+        run: python3 tests/memory.py axiom.iso build/memory-test
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}

@@ -212,6 +212,7 @@ static void cmd_allocstat(const char *args){
     console_write("HEAP PAYLOAD BYTES: ");console_write_u64(heap_bytes_used());console_putc('\n');
 }
 static void cmd_heaptest(const char *args){(void)args;uint64_t pages_before=pmm_free_pages(),bytes_before=heap_bytes_used();void *a=kmalloc(64),*b=kmalloc(7000);if(!a||!b){console_write("HEAP ALLOCATION FAILED.\n");LOG_ERROR("HEAP MAP ALLOCATE FREE TEST");return;}((volatile uint8_t *)a)[0]=0x5a;((volatile uint8_t *)b)[6999]=0xa5;kfree(a);kfree(b);bool ok=pmm_free_pages()==pages_before&&heap_bytes_used()==bytes_before;console_write(ok?"HEAP MAP ALLOCATE FREE TEST: PASS\n":"HEAP MAP ALLOCATE FREE TEST: FAIL\n");log_write(ok?"PASS":"FAIL","HEAP MAP ALLOCATE FREE TEST");}
+static void cmd_memfailtest(const char *args){(void)args;bool ok=memory_allocation_self_test();console_write(ok?"MEMORY ALLOCATION ROLLBACK: PASS\n":"MEMORY ALLOCATION ROLLBACK: FAIL\n");log_write(ok?"PASS":"FAIL","MEMORY ALLOCATION ROLLBACK");}
 static void cmd_fault(const char *args){(void)args;LOG_WARN("deliberate invalid opcode test");__asm__ volatile("ud2");}
 
 static void cmd_cputest(const char *args) {
@@ -305,7 +306,7 @@ static void cmd_proctest(const char*a){(void)a;bool ok=process_runtime_ready();c
 static void cmd_rescan(const char*a){(void)a;if(!require_cap(CAP_DEVICE,"rescan"))return;pci_init();storage_probe_hardware();bool ok=device_manager_scan();account_audit("device-rescan",ok?"complete":"failed");console_write(ok?"PCI STORAGE AND DEVICE RESCAN COMPLETE.\n":"DEVICE RESCAN FAILED.\n");}
 static void cmd_layout(const char *args){if(!*args){console_write("KEYBOARD LAYOUT: ");console_write(keyboard_layout_name());console_write("\nAVAILABLE: US DVORAK\n");return;}bool ok=config_user()?config_user_set("keyboard",args):keyboard_set_layout(args);if(ok)console_write("KEYBOARD LAYOUT CHANGED AND SAVED.\n");else console_write("UNKNOWN LAYOUT. USE US OR DVORAK.\n");}
 static void cmd_run(const char *args){char script[256];size_t n=0;while(args[n]&&n+1<sizeof(script)){script[n]=args[n];n++;}script[n]=0;char *part=script;while(*part){char *end=part;while(*end&&*end!=';')end++;if(*end)*end++=0;while(*part==' ')part++;if(*part)execute(part);part=end;}}
-static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;proctest;accounttest;configtest;devicetest;accounts;ps;packages;services;servicetest;settings;powerstatus;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
+static void cmd_script(const char *args){if(streq(args,"demo")){char demo[]="version;sysinfo;heaptest;memfailtest;proctest;accounttest;configtest;devicetest;accounts;ps;packages;services;servicetest;settings;powerstatus;allocstat;irqs;smp";cmd_run(demo);}else console_write("AVAILABLE BUILT-IN SCRIPT: DEMO\nUSE RUN CMD;CMD FOR CUSTOM SCRIPTS.\n");}
 
 static void cmd_reboot(const char *args) { if(!require_cap(CAP_POWER,"reboot")||!confirmed(args)){console_write("USAGE: REBOOT --CONFIRM\n");return;}account_audit("reboot","confirmed");LOG_INFO("reboot requested");console_write("COORDINATING CLEAN REBOOT...\n");if(!power_prepare(POWER_ACTION_REBOOT)){console_write("REBOOT REFUSED: FLUSH OR SERVICE FAILURE.\n");return;}console_write("ALL WRITES FLUSHED. REBOOTING...\n");machine_reboot(); }
 static void cmd_save(const char*a){(void)a;if(!checkpoint_active()){console_write(checkpoint_status());console_putc('\n');return;}bool ok=account_save()&&checkpoint_save();console_write(ok?"SESSION SAVED TO DATA DISK.\n":"SESSION SAVE FAILED.\n");}
@@ -317,7 +318,7 @@ static const struct command commands[] = {
     {"save",cmd_save},{"help",cmd_help},{"about",cmd_about},{"clear",cmd_clear},{"echo",cmd_echo},
     {"version",cmd_version},{"sysinfo",cmd_sysinfo},{"cpu",cmd_cpu},{"ram",cmd_ram},
     {"modules",cmd_modules},{"memtest",cmd_memtest},{"cputest",cmd_cputest},
-    {"allocstat",cmd_allocstat},{"heaptest",cmd_heaptest},{"fault",cmd_fault},
+    {"allocstat",cmd_allocstat},{"heaptest",cmd_heaptest},{"memfailtest",cmd_memfailtest},{"fault",cmd_fault},
     {"acpi",cmd_acpi},{"time",cmd_time},{"uptime",cmd_uptime},{"random",cmd_random},
     {"logs",cmd_logs},{"journal",cmd_journal},{"irqs",cmd_irqs},{"smp",cmd_smp},{"shutdown",cmd_shutdown},
     {"pci",cmd_pci},{"disks",cmd_disks},{"layout",cmd_layout},{"run",cmd_run},{"script",cmd_script},
