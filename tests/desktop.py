@@ -74,6 +74,22 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     click(85, 125)
     wait_for("[DESKTOP-SAVED] /users/Void/note-2.txt")
 
+    key("f8")
+    for _ in range(len("/users/Void/document.txt")): key("backspace")
+    for c in "/users/Void/work.txt": key({"/":"slash", ".":"dot"}.get(c, "shift-v" if c=="V" else c))
+    screenshot("save-as-path")
+    key("ret"); wait_for("[DESKTOP-SAVED] /users/Void/work.txt")
+    command_text(" updated", key)
+    key("f8")
+    for _ in range(len("/users/Void/document.txt")): key("backspace")
+    for c in "/users/Void/work.txt": key({"/":"slash", ".":"dot"}.get(c, "shift-v" if c=="V" else c))
+    key("ret"); screenshot("replace-confirmation")
+    before = log.read_text().count("[DESKTOP-SAVED] /users/Void/work.txt")
+    assert before == 1, "Overwrite skipped confirmation"
+    key("ret")
+    assert log.read_text().count("[DESKTOP-SAVED] /users/Void/work.txt") == 2
+    screenshot("replaced-file")
+
     key("f5")
     click(245, 180)  # Slate wallpaper
     key("f1")

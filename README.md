@@ -109,9 +109,14 @@ the desktop; the persistence setup below is optional.
 - **Files:** browse your home or the root tree, enter folders, and open small
   text files. Up/Down selects entries, Enter opens them, and Backspace goes up.
 - **Editor:** edit ASCII text under 4096 bytes using Left/Right, Home/End,
-  Backspace/Delete, and Enter. Save copy creates the next available
-  `note-N.txt` in your home, preserving existing files. Save failures retain the
-  draft. Save before opening another file or ending the session.
+  Backspace/Delete, and Enter. Save copy (F9) creates the next available
+  `note-N.txt` in your home. Save as (F8) accepts an absolute destination path;
+  Enter saves and Escape cancels. Replacing an existing file requires a second
+  confirmation. Allocation, quota, permission, or lock failures retain both the
+  old file and your draft. Saves preserve existing ownership, modes, and hard
+  links; symbolic-link destinations are refused. Save before opening another
+  file or ending the session. Disk durability still requires a successful
+  checkpoint to an optional prepared data disk.
 - **Settings:** switch wallpaper colors and choose US/Dvorak keyboard layouts.
 - **Task Manager:** a live read-only process monitor with PID/TID, owner, state,
   scheduler ticks, free RAM, kernel heap use, and uptime. It refreshes every

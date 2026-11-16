@@ -20,6 +20,10 @@ int vfs_open(const char *path,uint32_t flags);
 int vfs_close(int fd);
 long vfs_read(int fd,void *buffer,size_t size);
 long vfs_write(int fd,const void *buffer,size_t size);
+/* All-or-nothing content replacement; preserves existing inode metadata/links.
+ * Refuses symlink destinations. overwrite=false creates only. RAM transaction;
+ * callers must checkpoint separately for persistence. */
+int vfs_replace_file(const char *path,const void *buffer,size_t size,bool overwrite);
 long vfs_seek(int fd,uint64_t offset);
 int vfs_mkdir(const char *path,uint32_t mode);
 int vfs_unlink(const char *path,bool recursive);

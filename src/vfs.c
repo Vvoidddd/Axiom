@@ -32,7 +32,72 @@ int vfs_open(const char*path,uint32_t flags){int n=resolve(path,true);if(n<0&&(f
 int vfs_close(int fd){if(fd<0||fd>=FD_MAX||!fds[fd].used)return VFS_EBADF;fds[fd].used=false;return 0;}
 long vfs_read(int fd,void*b,size_t size){if(fd<0||fd>=FD_MAX||!fds[fd].used)return VFS_EBADF;struct descriptor*f=&fds[fd];struct node*n=content(f->node);if(!access_ok(n,4))return VFS_EACCES;if(n->directory)return VFS_EISDIR;if(f->offset>=n->size)return 0;if(size>n->size-f->offset)size=n->size-f->offset;uint8_t*d=b;for(size_t i=0;i<size;i++){uint64_t pos=f->offset+i;d[i]=n->pages[pos/4096]?n->pages[pos/4096][pos%4096]:0;}f->offset+=size;return size;}
 uint64_t vfs_user_usage(uint32_t uid){uint64_t total=0;for(int i=1;i<NODE_MAX;i++)if(nodes[i].used&&!nodes[i].hardlink&&nodes[i].uid==uid)total+=nodes[i].capacity;return total;}
-long vfs_write(int fd,const void*b,size_t size){if(fd<0||fd>=FD_MAX||!fds[fd].used)return VFS_EBADF;struct descriptor*f=&fds[fd];struct node*n=content(f->node);if(!(f->flags&VFS_WRITE)||!access_ok(n,2))return VFS_EACCES;if(readonly_node(f->node))return VFS_EROFS;if(f->offset+size>n->quota)return VFS_EDQUOT;if(f->offset+size>FILE_MAX)return VFS_ENOSPC;uint64_t first=f->offset/4096,last=size?(f->offset+size-1)/4096:first,new_pages=0;for(uint64_t p=first;p<=last;p++)if(!n->pages[p])new_pages++;uint64_t limit=n->uid<16?quotas[n->uid]:FILE_MAX;if(vfs_user_usage(n->uid)+new_pages*4096>limit)return VFS_EDQUOT;for(uint64_t p=first;p<=last;p++)if(!n->pages[p]){n->pages[p]=kmalloc(4096);if(!n->pages[p])return VFS_ENOSPC;for(unsigned x=0;x<4096;x++)n->pages[p][x]=0;n->capacity+=4096;}const uint8_t*s=b;for(size_t i=0;i<size;i++){uint64_t pos=f->offset+i;n->pages[pos/4096][pos%4096]=s[i];}f->offset+=size;if(f->offset>n->size)n->size=f->offset;n->modified=now();return size;}
+long vfs_write(int fd,const void*b,size_t size){
+    if(fd<0||fd>=FD_MAX||!fds[fd].used)return VFS_EBADF;
+    struct descriptor*f=&fds[fd];struct node*n=content(f->node);
+    if(!(f->flags&VFS_WRITE)||!access_ok(n,2))return VFS_EACCES;
+    if(readonly_node(f->node))return VFS_EROFS;
+    if(n->locked)return VFS_EBUSY;
+    if(!size)return 0;
+    if(!b)return VFS_EINVAL;
+    if(f->offset>n->quota||size>n->quota-f->offset)return VFS_EDQUOT;
+    if(f->offset>FILE_MAX||size>FILE_MAX-f->offset)return VFS_ENOSPC;
+    uint64_t first=f->offset/4096,last=(f->offset+size-1)/4096,new_pages=0;
+    for(uint64_t p=first;p<=last;p++)if(!n->pages[p])new_pages++;
+    uint64_t limit=n->uid<16?quotas[n->uid]:FILE_MAX;
+    if(vfs_user_usage(n->uid)+new_pages*4096>limit)return VFS_EDQUOT;
+    bool added[256]={0};
+    for(uint64_t p=first;p<=last;p++)if(!n->pages[p]){
+        n->pages[p]=kmalloc(4096);
+        if(!n->pages[p]){
+            for(uint64_t q=first;q<p;q++)if(added[q]){kfree(n->pages[q]);n->pages[q]=0;}
+            return VFS_ENOSPC;
+        }
+        added[p]=true;for(unsigned x=0;x<4096;x++)n->pages[p][x]=0;
+    }
+    n->capacity+=new_pages*4096;
+    const uint8_t*s=b;
+    for(size_t i=0;i<size;i++){uint64_t pos=f->offset+i;n->pages[pos/4096][pos%4096]=s[i];}
+    f->offset+=size;if(f->offset>n->size)n->size=f->offset;n->modified=now();return size;
+}
+int vfs_replace_file(const char*path,const void*buffer,size_t size,bool overwrite){
+    if(!path||!*path||(!buffer&&size))return VFS_EINVAL;
+    if(slen(path)>PATH_MAX)return VFS_ENAMETOOLONG;
+    unsigned component=0;
+    for(const char*p=path;*p;p++){if(*p=='/')component=0;else if(++component>NAME_MAX)return VFS_ENAMETOOLONG;}
+    if(size>FILE_MAX)return VFS_ENOSPC;
+    int at=resolve(path,false);struct node*n=0;
+    if(at>=0){
+        if(nodes[at].symlink)return VFS_EINVAL;
+        n=content(at);
+        if(n->directory)return VFS_EISDIR;
+        if(!overwrite)return VFS_EEXIST;
+        if(readonly_node(at))return VFS_EROFS;
+        if(n->locked)return VFS_EBUSY;
+        if(!access_ok(n,2))return VFS_EACCES;
+        if(size>n->quota)return VFS_EDQUOT;
+    }else if(at!=VFS_ENOENT)return at;
+    uint32_t uid=n?n->uid:current_uid;
+    uint64_t capacity=(size+4095)&~4095ull,limit=uid<16?quotas[uid]:FILE_MAX;
+    if(vfs_user_usage(uid)-(n?n->capacity:0)+capacity>limit)return VFS_EDQUOT;
+    uint8_t*pages[256]={0};unsigned count=(unsigned)(capacity/4096),allocated=0;
+    for(;allocated<count;allocated++){
+        pages[allocated]=kmalloc(4096);if(!pages[allocated])break;
+        for(unsigned j=0;j<4096;j++){
+            size_t pos=(size_t)allocated*4096+j;
+            pages[allocated][j]=pos<size?((const uint8_t*)buffer)[pos]:0;
+        }
+    }
+    int error=allocated<count?VFS_ENOSPC:0;
+    if(!error&&!n){at=create(path,false,0644);if(at<0)error=at;else n=&nodes[at];}
+    if(error){for(unsigned i=0;i<allocated;i++)kfree(pages[i]);return error;}
+    /* Kernel VFS calls are serialized on the BSP. Publish only after all
+     * allocation/validation succeeds; existing descriptors and hard links
+     * keep their inode and offsets. This is not crash-atomic disk storage. */
+    for(unsigned i=0;i<256;i++){uint8_t*old=n->pages[i];n->pages[i]=pages[i];if(old)kfree(old);}
+    n->size=size;n->capacity=capacity;n->modified=now();
+    return 0;
+}
 long vfs_seek(int fd,uint64_t o){if(fd<0||fd>=FD_MAX||!fds[fd].used)return VFS_EBADF;fds[fd].offset=o;return o;}
 int vfs_mkdir(const char*p,uint32_t m){int n=create(p,true,m);return n<0?n:0;}
 static void release_content(struct node*n){for(unsigned p=0;p<256;p++)if(n->pages[p]){kfree(n->pages[p]);n->pages[p]=0;}n->capacity=0;}

@@ -24,6 +24,9 @@ static unsigned icon_focus,task_first,task_count;
 static uint64_t task_refresh;
 static char directory[256],status[96],document[4096];
 static struct form_field editor;
+static bool save_dialog,replace_confirm;
+static char save_path[256];
+static struct form_field filename;
 static size_t editor_top;
 static uint32_t wallpaper=0x152d46;
 static struct {char name[48];bool directory;} entries[256];
@@ -47,7 +50,7 @@ static void refresh(void){
     message(error?vfs_error_string(error):total>256?"Showing first 256 entries.":"Click an entry to open. UP / DOWN and ENTER also work.");
 }
 static void switch_app(enum app next){
-    app=next;confirm_exit=false;console_visible(app==TERMINAL);
+    app=next;confirm_exit=false;save_dialog=replace_confirm=false;console_visible(app==TERMINAL);
     if(app==FILES)refresh();
     else if(app==TASKS){task_first=0;task_refresh=0;message("Read-only monitor. UP / DOWN scroll. CPU time is scheduler ticks.");}
     else status[0]=0;
@@ -75,7 +78,7 @@ static void open_entry(void){
     for(long i=0;i<n;i++)document[i]=data[i];
     document[n]=0;
     editor.length=editor.cursor=(size_t)n;editor_top=0;unsaved=false;
-    switch_app(EDITOR);message("Opened text. Save copy writes a new file in your home.");
+    switch_app(EDITOR);message("F8: Save as. F9: Save a new copy in your home.");
 }
 static void save_copy(void){
     const struct account_info*u=account_current();if(!u)return;
@@ -89,18 +92,32 @@ static void save_copy(void){
         if(result){message(vfs_error_string(result));return;}
     }
     if(i>999){message("No free note names. Rename old notes in Terminal.");return;}
-    /* Save as a fresh file: vfs_rename cannot atomically replace an existing file. */
-    int fd=vfs_open(path,VFS_WRITE|VFS_CREATE);
-    if(fd<0){message(vfs_error_string(fd));return;}
-    long written=vfs_write(fd,document,editor.length);int closed=vfs_close(fd);
-    if(written!=(long)editor.length||closed){vfs_unlink(path,false);message("Save failed. Your draft is still here; original files unchanged.");return;}
+    int error=vfs_replace_file(path,document,editor.length,false);
+    if(error){message(vfs_error_string(error));return;}
     unsaved=false;copy(status,"Saved in home: ",sizeof(status));copy(status+15,name,sizeof(status)-15);dirty=true;
     if(!checkpoint_save())message("Saved in RAM only. Data disk checkpoint failed.");
     log_write("DESKTOP-SAVED",path);
 }
+static void begin_save_as(void){
+    const struct account_info*u=account_current();if(!u)return;
+    if(!joined(save_path,u->home,"document.txt")){message("Home path is too long.");return;}
+    filename=(struct form_field){.text=save_path,.capacity=sizeof(save_path),.length=length(save_path),.cursor=length(save_path)};
+    save_dialog=true;replace_confirm=false;message("Enter an absolute file path. ENTER saves; ESC cancels.");
+}
+static void save_as(void){
+    if(save_path[0]!='/'){message("Use an absolute path starting with /.");return;}
+    int error=vfs_replace_file(save_path,document,editor.length,replace_confirm);
+    if(error==VFS_EEXIST){replace_confirm=true;message("File exists. ENTER or Replace confirms; ESC cancels.");return;}
+    replace_confirm=false;
+    if(error){message(vfs_error_string(error));return;}
+    save_dialog=false;unsaved=false;message("Saved file. Original retained if saving to a different path.");
+    if(!checkpoint_save())message("Saved in RAM only. Data disk checkpoint failed.");
+    log_write("DESKTOP-SAVED",save_path);
+}
 static void draw_editor(void){
     button(wx+16,wy+44,152,"Save copy",false);
-    text(wx+185,wy+54,unsaved?"Unsaved draft":"Saved / unchanged",unsaved?0xffcf7b:0x91d6b0);
+    button(wx+180,wy+44,152,"Save as",save_dialog);
+    text(wx+350,wy+54,unsaved?"Unsaved draft":"Saved / unchanged",unsaved?0xffcf7b:0x91d6b0);
     unsigned columns=(unsigned)(ww-40)/12,rows=(unsigned)(wh-140)/18;
     size_t caret_row=0,caret_col=0;
     for(size_t i=0;i<editor.cursor;i++){if(document[i]=='\n'||++caret_col>=columns){caret_row++;caret_col=0;}}
@@ -113,6 +130,18 @@ static void draw_editor(void){
         if(c=='\n'||++col>=columns){row++;col=0;}
     }
     fb_rect(wx+20+caret_col*12,wy+88+(caret_row-editor_top)*18,2,18,0x8bc3ff);
+    if(save_dialog){
+        fb_rect(wx+12,wy+84,ww-24,158,0x293b50);
+        text(wx+24,wy+100,"SAVE AS - FULL PATH",0xf4f7fa);
+        unsigned columns=(unsigned)(ww-72)/12;
+        if(filename.cursor<filename.offset)filename.offset=filename.cursor;
+        if(filename.cursor>=filename.offset+columns)filename.offset=filename.cursor-columns+1;
+        char shown[256];copy(shown,save_path+filename.offset,columns+1);
+        fb_rect(wx+24,wy+126,ww-48,38,0x161b22);text(wx+32,wy+138,shown,0xf4f7fa);
+        fb_rect(wx+32+(filename.cursor-filename.offset)*12,wy+134,2,22,0x8bc3ff);
+        button(wx+24,wy+184,152,replace_confirm?"Replace":"Save",true);
+        button(wx+188,wy+184,152,"Cancel",false);
+    }
 }
 static int icon_step(void){int step=(height-128)/5;return step<118?step:118;}
 static void draw_icon(unsigned i){
@@ -222,6 +251,11 @@ static long session_action(long action){
     return action;
 }
 static long click(void){
+    if(save_dialog){
+        if(inside(wx+24,wy+184,152,32))save_as();
+        else if(inside(wx+188,wy+184,152,32)){save_dialog=replace_confirm=false;message("Save cancelled. Draft retained.");}
+        return 0;
+    }
     if(my>=height-48){
         if(inside(width-326,height-40,76,32)){switch_app(TASKS);return 0;}
         for(unsigned i=0;i<5;i++)if(inside(12+(int)i*126,height-40,118,32)){switch_app((enum app)i);return 0;}
@@ -235,7 +269,10 @@ static long click(void){
         else if(inside(wx+104,wy+44,92,32)){home_path();refresh();}
         else if(inside(wx+206,wy+44,92,32)){copy(directory,"/",sizeof(directory));refresh();}
         else if(inside(wx+12,wy+118,ww-24,(int)page_rows()*26)){selected=first+(unsigned)(my-wy-118)/26;open_entry();}
-    }else if(app==EDITOR&&inside(wx+16,wy+44,152,32))save_copy();
+    }else if(app==EDITOR){
+        if(inside(wx+16,wy+44,152,32))save_copy();
+        else if(inside(wx+180,wy+44,152,32))begin_save_as();
+    }
     else if(app==SETTINGS){
         if(inside(wx+24,wy+98,150,32)){wallpaper=0x152d46;dirty=true;}
         else if(inside(wx+190,wy+98,150,32)){wallpaper=0x242936;dirty=true;}
@@ -257,7 +294,14 @@ long desktop_poll(void){
     }
     struct key_event e;long value=0;
     if(keyboard_poll_event(&e)&&e.pressed){
-        if(e.scancode>=0x3b&&e.scancode<=0x3f)switch_app((enum app)(e.scancode-0x3b));
+        if(save_dialog){
+            if(e.scancode==1){save_dialog=replace_confirm=false;message("Save cancelled. Draft retained.");}
+            else if(e.character=='\n')save_as();
+            else if(form_edit(&filename,&e)){replace_confirm=false;message("ENTER saves; ESC cancels.");}
+        }
+        else if(app==EDITOR&&e.scancode==0x42)begin_save_as();
+        else if(app==EDITOR&&e.scancode==0x43)save_copy();
+        else if(e.scancode>=0x3b&&e.scancode<=0x3f)switch_app((enum app)(e.scancode-0x3b));
         else if(e.scancode==0x41)switch_app(TASKS);
         else if(e.scancode==0x40){if(app==HOME||app==TERMINAL)switch_app(SETTINGS);message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");}
         else if(app==HOME&&(e.special==KEY_HOME||e.special==KEY_END)){icon_focus=e.special==KEY_HOME?0:4;dirty=true;}

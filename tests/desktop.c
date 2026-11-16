@@ -39,6 +39,7 @@ bool keyboard_poll_event(struct key_event*out){if(!has_key)return false;*out=key
 bool mouse_poll_event(struct mouse_event*out){if(!has_mouse)return false;*out=mouse;has_mouse=false;return true;}
 static long press(char c,unsigned scan){key=(struct key_event){.pressed=true,.character=c,.scancode=scan};has_key=true;return desktop_poll();}
 static void type(const char*s){while(*s)press(*s++,0);}
+static void save_name(const char*path){press(0,0x42);for(size_t i=0;i<strlen(user.home)+strlen("/document.txt");i++)press('\b',0);type(path);}
 static long click(int x,int y){
     mouse=(struct mouse_event){.dx=x-px,.dy=y-py,.buttons=1};has_mouse=true;
     px=x;py=y;long result=desktop_poll();
@@ -83,10 +84,22 @@ int main(void){
     vfs_set_credentials(0,0);assert(!vfs_set_quota(1,16384));vfs_set_credentials(1,1);
     click(85,125);
     contents("/users/test/note-3.txt","hello desktop\nsecond line!?");
+    save_name("/users/test/chosen.txt");press('\n',0);
+    contents("/users/test/chosen.txt","hello desktop\nsecond line!?");
+    type("new");save_name("/users/test/chosen.txt");press('\n',0);
+    contents("/users/test/chosen.txt","hello desktop\nsecond line!?"); // Confirmation required.
+    press(0,1); // Escape retains draft and old file.
+    save_name("/users/test/chosen.txt");press('\n',0);press('\n',0);
+    contents("/users/test/chosen.txt","hello desktop\nsecond line!?new");
+    type("!");assert(!vfs_lock("/users/test/chosen.txt",true));
+    save_name("/users/test/chosen.txt");press('\n',0);press('\n',0);
+    contents("/users/test/chosen.txt","hello desktop\nsecond line!?new");
+    assert(!vfs_lock("/users/test/chosen.txt",false));press('\n',0);press('\n',0);
+    contents("/users/test/chosen.txt","hello desktop\nsecond line!?new!");
     assert(click(830,745)==0x100);
     desktop_stop();assert(!desktop_active());
     fb.height=600;assert(fb_init(&fb));desktop_start();px=512;py=300;click(100,470); // Last icon still fits at 600p.
     assert(pixels[64*1024+32]==0x293b50);desktop_stop();
     vfs_set_credentials(0,0);assert(!vfs_unlink(user.home,true));free(pixels);
-    puts("PASS: desktop file round trips, non-destructive saves, quota failure, draft guard and terminal clipping");
+    puts("PASS: desktop file round trips, Save As confirmation/cancel/retry, quota failure, draft guard and terminal clipping");
 }

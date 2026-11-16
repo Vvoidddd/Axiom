@@ -18,8 +18,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential curl xorriso
       - name: Build Axiom
         run: ./all
-      - name: Check immutable VFS boundaries
-        run: make test-vfs
+      - name: Check VFS boundaries and failed-save rollback
+        run: make test-vfs test-vfs-atomic
       - name: Check text input and mouse decoding
         run: make test-input
       - name: Check desktop file saves and terminal boundaries

@@ -7,6 +7,8 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Add all-or-nothing VFS content replacement and an editor Save As flow with explicit overwrite confirmation; fault-test preservation of the old file and draft on failed saves.
+- [x] Roll back newly allocated VFS write pages on allocation failure; reject offset overflow, honor locks on existing descriptors, and make empty writes allocation-free.
 - [x] Add recognizable desktop launcher icons with mouse activation, keyboard focus, Tab/arrows, and Enter/Space navigation.
 - [x] Add a live graphical Task Manager showing permitted process rows, states, scheduler ticks, free RAM, heap use, and uptime, with taskbar and F7 access.
 
@@ -236,7 +238,6 @@ recorded in Completed. New phases do not imply that Phases 3B-7 are finished.
 ## Phase 9: Workspace and Productivity
 
 - [ ] Retain unsaved documents through screen locking and user switching without exposing one session's buffers to another.
-- [ ] Add atomic replace to the VFS and an editor Save As flow; prove failed writes never truncate the old document.
 - [ ] Add editor undo/redo, selection, search, line navigation, and bounded large-file handling.
 - [ ] Add file associations and Open With based on validated file types rather than executable filename guesses.
 - [ ] Restore approved per-user window positions and open documents after reboot, with a way to disable session restore.
