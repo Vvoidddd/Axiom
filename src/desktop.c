@@ -12,14 +12,15 @@
 #include "process.h"
 #include "memory.h"
 #include "security.h"
+#include "picture.h"
 #include <axiom/syscall.h>
 
-enum app {HOME,TERMINAL,FILES,EDITOR,SETTINGS,TASKS};
+enum app {HOME,TERMINAL,FILES,EDITOR,SETTINGS,TASKS,IMAGES};
 static enum app app;
 static bool active,dirty,unsaved,confirm_exit;
 static int mx,my,width,height,wx,wy,ww,wh;
-static struct window {int x,y,w,h;bool open,minimized,maximized;} windows[6];
-static enum app order[5],dragging;
+static struct window {int x,y,w,h;bool open,minimized,maximized;} windows[7];
+static enum app order[6],dragging;
 static unsigned window_count;
 static int drag_x,drag_y;
 static uint32_t *backbuffer;
@@ -28,7 +29,8 @@ static uint8_t buttons;
 static unsigned selected,first,count,total;
 static unsigned icon_focus,task_first,task_count;
 static uint64_t task_refresh;
-static char directory[256],app_status[6][96],document[4096];
+static char directory[256],app_status[7][96],document[4096];
+static struct picture picture;
 #define status app_status[app]
 static struct form_field editor;
 static bool save_dialog,replace_confirm;
@@ -37,7 +39,7 @@ static struct form_field filename;
 static size_t editor_top;
 static uint32_t wallpaper=0x152d46;
 static struct {char name[48];bool directory;} entries[256];
-static const char *titles[]={"Desktop","Terminal","Files","Text editor","Settings","Task Manager"};
+static const char *titles[]={"Desktop","Terminal","Files","Text editor","Settings","Task Manager","Image viewer"};
 
 static size_t length(const char*s){size_t n=0;while(s[n])n++;return n;}
 static void copy(char*d,const char*s,size_t cap){size_t n=0;while(s[n]&&n+1<cap){d[n]=s[n];n++;}d[n]=0;}
@@ -79,10 +81,11 @@ static void maximize(void){if(app!=HOME){windows[app].maximized=!windows[app].ma
 static void switch_app(enum app next){
     app=next;confirm_exit=false;save_dialog=replace_confirm=false;console_visible(app==TERMINAL);
     dragging=HOME;
-    if(app==HOME){for(unsigned i=1;i<=TASKS;i++)windows[i].minimized=true;}
+    if(app==HOME){for(unsigned i=1;i<=IMAGES;i++)windows[i].minimized=true;}
     else{raise_window(app);geometry(app);}
     if(app==FILES)refresh();
     else if(app==TASKS){task_first=0;task_refresh=0;message("Read-only monitor. UP / DOWN scroll. CPU time is scheduler ticks.");}
+    else if(app==IMAGES&&!picture.pixels){int error=picture_load("/system/display.bmp",&picture);message(error?vfs_error_string(error):"Display sample. Open other 24-bit BMP images from Files.");}
     else status[0]=0;
     dirty=true;log_write("DESKTOP",titles[app]);
 }
@@ -97,9 +100,15 @@ static void open_entry(void){
     if(selected>=count)return;
     char path[256];if(!joined(path,directory,entries[selected].name)){message("Path is too long.");return;}
     if(entries[selected].directory){copy(directory,path,sizeof(directory));refresh();return;}
-    if(unsaved){message("Save your editor draft before opening another file.");return;}
     struct vfs_stat st;int error=vfs_stat_path(path,&st);
     if(error){message(vfs_error_string(error));return;}
+    int probe=vfs_open(path,VFS_READ);if(probe<0){message(vfs_error_string(probe));return;}
+    unsigned char signature[2];long bytes=vfs_read(probe,signature,2);vfs_close(probe);
+    if(bytes==2&&signature[0]=='B'&&signature[1]=='M'){
+        error=picture_load(path,&picture);if(error){message(vfs_error_string(error));return;}
+        switch_app(IMAGES);message(path);log_write("DESKTOP-IMAGE",path);return;
+    }
+    if(unsaved){message("Save your editor draft before opening another file.");return;}
     if(st.size>=sizeof(document)){message("Editor supports text files smaller than 4096 bytes.");return;}
     int fd=vfs_open(path,VFS_READ);if(fd<0){message(vfs_error_string(fd));return;}
     char data[4096];long n=vfs_read(fd,data,sizeof(data)-1);vfs_close(fd);
@@ -223,7 +232,8 @@ static void draw(void){
     fb_rect(width*2/3,38,width/3,height-86,0x1b3954);
     fb_rect(0,0,width,38,0x101c2a);
     text(20,12,"AXIOM",0xf4f7fa);
-    const struct account_info*u=account_current();text(140,12,u?u->name:"Session",0x9eb4ca);
+    const struct account_info*u=account_current();char username[25];copy(username,u?u->name:"Session",sizeof(username));text(140,12,username,0x9eb4ca);
+    button(width-476,3,146,"Images",app==IMAGES);
     text(width-312,12,"F1: DESKTOP  F7: TASKS",0x9eb4ca);
     fb_rect(0,height-48,width,48,0x101c2a);
     const char*labels[]={"Home","Terminal","Files","Editor","Settings"};
@@ -253,12 +263,26 @@ static void draw(void){
             for(unsigned i=first;i<count&&i<first+page_rows();i++){
                 int y=wy+122+(int)(i-first)*26;
                 if(i==selected)fb_rect(wx+12,y-4,ww-24,26,0x243f5b);
-                text(wx+20,y,entries[i].directory?"DIR":"TXT",entries[i].directory?0x8bc3ff:0x91d6b0);
+                text(wx+20,y,entries[i].directory?"DIR":"FILE",entries[i].directory?0x8bc3ff:0x91d6b0);
                 text(wx+78,y,entries[i].name,0xf4f7fa);
             }
         }
         if(app==EDITOR)draw_editor();
         if(app==TASKS)draw_tasks();
+        if(app==IMAGES){
+            button(wx+16,wy+44,110,"Files",false);
+            if(!picture.pixels)text(wx+20,wy+94,"Open a 24-bit BMP image from Files.",0x9eb4ca);
+            else{
+                unsigned available_w=ww-40,available_h=wh-120,w=picture.width,h=picture.height;
+                if(w>available_w){h=(uint64_t)h*available_w/w;w=available_w;}
+                if(h>available_h){w=(uint64_t)w*available_h/h;h=available_h;}
+                if(!w)w=1;
+                if(!h)h=1;
+                unsigned scale=1;while(scale<4&&w*(scale+1)<=available_w&&h*(scale+1)<=available_h)scale++;
+                unsigned left=wx+(ww-w*scale)/2,top=wy+84+(available_h-h*scale)/2;
+                for(unsigned y=0;y<h;y++)for(unsigned x=0;x<w;x++)fb_rect(left+x*scale,top+y*scale,scale,scale,picture.pixels[(uint64_t)y*picture.height/h*picture.width+(uint64_t)x*picture.width/w]);
+            }
+        }
         if(app==SETTINGS){
             text(wx+24,wy+65,"APPEARANCE",0x9eb4ca);
             button(wx+24,wy+98,150,"Ocean",wallpaper==0x152d46);button(wx+190,wy+98,150,"Slate",wallpaper==0x242936);
@@ -280,7 +304,7 @@ void desktop_start(void){
     if(width<960||height<600){active=false;console_init();return;}
     active=true;wx=32;wy=64;ww=width-160;wh=height-192;
     window_count=0;dragging=HOME;
-    for(unsigned i=0;i<=TASKS;i++){windows[i]=(struct window){.x=wx,.y=wy,.w=ww,.h=wh};app_status[i][0]=0;}
+    for(unsigned i=0;i<=IMAGES;i++){windows[i]=(struct window){.x=wx,.y=wy,.w=ww,.h=wh};app_status[i][0]=0;}
     /* ponytail: cap the software surface at 16 MiB; larger modes draw directly. */
     backbuffer=(uint64_t)width*height<=4194304?kmalloc((size_t)width*height*4):0;
     mx=width/2;my=height/2;buttons=0;icon_focus=0;unsaved=confirm_exit=false;status[0]=document[0]=0;
@@ -288,7 +312,7 @@ void desktop_start(void){
     home_path();console_viewport(wx+12,wy+44,ww-24,wh-56);console_clear();
     switch_app(HOME);draw();log_write("DESKTOP","session ready");
 }
-void desktop_stop(void){active=false;fb_pointer_hide();fb_present();kfree(backbuffer);backbuffer=0;console_init();document[0]=0;unsaved=false;}
+void desktop_stop(void){active=false;fb_pointer_hide();fb_present();kfree(backbuffer);backbuffer=0;picture_close(&picture);console_init();document[0]=0;unsaved=false;}
 bool desktop_active(void){return active;}
 static long session_action(long action){
     if(unsaved&&!confirm_exit){confirm_exit=true;dirty=true;return 0;}
@@ -300,6 +324,7 @@ static long click(void){
         else if(inside(wx+188,wy+184,152,32)){save_dialog=replace_confirm=false;message("Save cancelled. Draft retained.");}
         return 0;
     }
+    if(inside(width-476,3,146,32)){if(app==IMAGES)minimize();else switch_app(IMAGES);return 0;}
     if(my>=height-48){
         if(inside(width-326,height-40,76,32)){if(app==TASKS)minimize();else switch_app(TASKS);return 0;}
         for(unsigned i=0;i<5;i++)if(inside(12+(int)i*126,height-40,118,32)){if(i&&app==(enum app)i)minimize();else switch_app((enum app)i);return 0;}
@@ -327,6 +352,7 @@ static long click(void){
         if(inside(wx+16,wy+44,152,32))save_copy();
         else if(inside(wx+180,wy+44,152,32))begin_save_as();
     }
+    else if(app==IMAGES&&inside(wx+16,wy+44,110,32))switch_app(FILES);
     else if(app==SETTINGS){
         if(inside(wx+24,wy+98,150,32)){wallpaper=0x152d46;dirty=true;}
         else if(inside(wx+190,wy+98,150,32)){wallpaper=0x242936;dirty=true;}
@@ -366,7 +392,7 @@ long desktop_poll(void){
         else if(app==EDITOR&&e.scancode==0x43)save_copy();
         else if(e.scancode==0x44)maximize();
         else if(e.scancode==0x57)minimize();
-        else if(e.scancode==0x58){for(unsigned i=1;i<=TASKS;i++){enum app next=(enum app)(1+(app+i-1)%TASKS);if(windows[next].open){switch_app(next);break;}}}
+        else if(e.scancode==0x58){for(unsigned i=1;i<=IMAGES;i++){enum app next=(enum app)(1+(app+i-1)%IMAGES);if(windows[next].open){switch_app(next);break;}}}
         else if(e.scancode>=0x3b&&e.scancode<=0x3f)switch_app((enum app)(e.scancode-0x3b));
         else if(e.scancode==0x41)switch_app(TASKS);
         else if(e.scancode==0x40){if(app==HOME||app==TERMINAL)switch_app(SETTINGS);message(account_save()&&checkpoint_save()?checkpoint_status():"Save failed. Keep the VM running and preserve your work.");}

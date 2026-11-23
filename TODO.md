@@ -7,6 +7,7 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Add a graphical image viewer, packaged display sample, and content-validated BMP opening from Files, with fit-to-window scaling, permission checks, bounded decoding, and failed-load preservation.
 - [x] Add simultaneously visible desktop windows with independent positions, title-bar dragging, stacking/focus, minimize/maximize/restore, close/reopen, and F10-F12 keyboard controls.
 - [x] Composite the desktop into a bounded software backbuffer with clipping and damaged-region presentation; retain a direct-render fallback when surface allocation fails.
 - [x] Enforce user-page W xor X and validate complete ELF layouts before allocation: executable entry points, disjoint load pages, stack/guard reservation, alignment, and page limits.
@@ -186,7 +187,7 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 - [ ] Define an app-to-window-server IPC protocol and reusable GUI toolkit.
 - [ ] Add scalable fonts, Unicode text shaping basics, icons, themes, and DPI handling.
 - [ ] Extend the initial desktop with notifications, a general application launcher, and full graphical system settings.
-- [ ] Move the desktop's multiple app windows into isolated user-space applications; add an image viewer.
+- [ ] Move the desktop's multiple app windows into isolated user-space applications.
 - [ ] Add safe task termination with ownership checks, protected system/session processes, and explicit unsaved-work handling.
 - [ ] Add clipboard, drag and drop, keyboard shortcuts, accessibility, and screen capture.
 - [ ] Preserve a text-only recovery mode when graphics or user space fails.

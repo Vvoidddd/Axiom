@@ -123,6 +123,10 @@ the desktop; the persistence setup below is optional.
   file or ending the session. Disk durability still requires a successful
   checkpoint to an optional prepared data disk.
 - **Settings:** switch wallpaper colors and choose US/Dvorak keyboard layouts.
+- **Images:** the top-panel button opens an image viewer with a packaged display
+  sample. Open uncompressed 24-bit BMP files from Files; images are scaled to fit
+  and opening them preserves editor drafts. Limits: 1 MiB input, 2048 pixels per
+  dimension, and 262,144 decoded pixels. Unsupported formats are rejected.
 - **Task Manager:** a live read-only process monitor with PID/TID, owner, state,
   scheduler ticks, free RAM, kernel heap use, and uptime. It refreshes every
   second and honors the same process-visibility permissions as `ps`. Scroll
@@ -134,7 +138,7 @@ the desktop; the persistence setup below is optional.
 The desktop draws multiple windows through a software backbuffer with clipping,
 falling back to direct rendering if it cannot allocate the buffer. It is hosted
 in the kernel around the ring-3 shell. A user-space compositor, isolated GUI
-applications, notifications, and an image viewer remain on the roadmap.
+applications and notifications remain on the roadmap.
 The desktop requires at least 960x600; smaller framebuffers keep the console.
 Without a prepared data disk, files and accounts remain RAM-backed and disappear
 on reboot. With one, committed state survives booting the ISO again. This is
@@ -305,6 +309,7 @@ make test-elf
 make test-input
 make test-desktop
 make test-framebuffer
+make test-picture
 make test-snapshot
 make test-checkpoint
 python3 tests/data-disk.py

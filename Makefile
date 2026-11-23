@@ -126,12 +126,17 @@ test-input: $(LIMINE)/limine.h
 	$(BUILD)/input-test
 
 .PHONY: test-desktop test-framebuffer
+.PHONY: test-picture
+test-picture: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/picture.c src/picture.c src/vfs.c -o $(BUILD)/picture-test
+	$(BUILD)/picture-test
+
 test-framebuffer: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/framebuffer.c src/framebuffer.c -o $(BUILD)/framebuffer-test
 	$(BUILD)/framebuffer-test
 
 test-desktop: $(LIMINE)/limine.h
-	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Isdk/include -I$(LIMINE) tests/desktop.c src/desktop.c src/console.c src/framebuffer.c src/form.c src/vfs.c -o $(BUILD)/desktop-test-host
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -Isdk/include -I$(LIMINE) tests/desktop.c src/desktop.c src/console.c src/framebuffer.c src/form.c src/vfs.c src/picture.c -o $(BUILD)/desktop-test-host
 	$(BUILD)/desktop-test-host
 
 .PHONY: test-snapshot

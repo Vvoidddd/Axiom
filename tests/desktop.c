@@ -118,6 +118,13 @@ int main(void){
     press(0,0x57);click(790,80);fb_pointer_hide();assert(pixels[64*1024+32]==0x152d46); // Minimize Terminal with its title-bar control.
     press(0,0x3c);drag(200,80,2000,2000);fb_pointer_hide();
     assert(pixels[136*1024+152]==0x293b50&&pixels[735*1024]==0x101c2a); // Clamp dragging above the taskbar.
+    vfs_set_credentials(0,0);assert(!vfs_set_quota(1,32768));vfs_set_credentials(1,1);
+    const unsigned char bmp[58]={[0]='B',[1]='M',[2]=58,[10]=54,[14]=40,[18]=1,[22]=1,[26]=1,[28]=24,[54]=0x33,[55]=0x22,[56]=0x11};
+    assert(!vfs_replace_file("/users/test/picture.bmp",bmp,sizeof(bmp),false));
+    press(0,0x3e);type(" image draft");press(0,0x3d);
+    for(unsigned i=0;i<4;i++){key=(struct key_event){.pressed=true,.special=KEY_DOWN};has_key=true;desktop_poll();}
+    press('\n',0);fb_pointer_hide();assert(pixels[375*1024+463]==0x112233);
+    press(0,0x3e);press(0,0x43);contents("/users/test/note-4.txt","hello desktop\nsecond line!?new! image draft");
     desktop_stop();assert(!desktop_active());
     fb.height=600;assert(fb_init(&fb));fail_alloc=true;desktop_start();fail_alloc=false;px=512;py=300;click(100,470); // 600p and direct-render fallback.
     assert(pixels[64*1024+32]==0x293b50);desktop_stop();

@@ -109,6 +109,16 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     assert pixel(screenshot("minimized"), 950, 230) == bytes.fromhex("1b3954")
     key("f3"); click(974, 139)  # Close Files; its app state can still be reopened.
 
+    click(610, 20); time.sleep(.25)  # Image viewer with the packaged display sample.
+    assert pixel(screenshot("image-sample"), 184, 224) == bytes.fromhex("101a3c")
+    key("f4"); command_text(" retained", key)  # Opening an image must retain this unsaved draft.
+    key("f2"); command("cp /system/display.bmp /users/Void/picture.bmp")
+    key("f3")
+    for _ in range(4): key("down")
+    key("ret"); wait_for("[DESKTOP-IMAGE] /users/Void/picture.bmp"); time.sleep(.2)
+    assert pixel(screenshot("image-from-files"), 184, 224) == bytes.fromhex("101a3c")
+    key("f4"); key("f9"); wait_for("[DESKTOP-SAVED] /users/Void/note-3.txt")
+
     key("f5")
     click(245, 180)  # Slate wallpaper
     key("f1")

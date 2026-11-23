@@ -1,6 +1,7 @@
 #include "initramfs.h"
 #include "vfs.h"
 #include "log.h"
+#include "memory.h"
 #include <stddef.h>
 struct embedded_file{const char*path;const char*data;};
 static const struct embedded_file image[]={
@@ -15,7 +16,19 @@ static const struct embedded_file image[]={
  ,{"/system/services/device-manager.svc","schema=1\nname=device-manager\naccount=device-manager\nexecutable=/system/bin/deviced\nrestart=always\nrestart_limit=3\nheartbeat_ms=2000\n"}
 };
 extern const unsigned char user_init_start[],user_init_end[],user_shell_start[],user_shell_end[],user_hello_start[],user_hello_end[],user_loggerd_start[],user_loggerd_end[],user_deviced_start[],user_deviced_end[];
+static bool install_display_sample(void){
+    enum {WIDTH=160,HEIGHT=96,SIZE=54+WIDTH*HEIGHT*3};
+    unsigned char*bmp=kmalloc(SIZE);if(!bmp)return false;
+    for(unsigned i=0;i<54;i++)bmp[i]=0;
+    bmp[0]='B';bmp[1]='M';bmp[2]=SIZE&255;bmp[3]=(SIZE>>8)&255;bmp[10]=54;bmp[14]=40;bmp[18]=WIDTH;bmp[22]=HEIGHT;bmp[26]=1;bmp[28]=24;
+    for(unsigned y=0;y<HEIGHT;y++)for(unsigned x=0;x<WIDTH;x++){
+        unsigned i=54+((HEIGHT-1-y)*WIDTH+x)*3;
+        bmp[i]=((x/20+y/12)&1)?210:60;bmp[i+1]=y*255/(HEIGHT-1);bmp[i+2]=x*255/(WIDTH-1);
+    }
+    bool ok=vfs_replace_file("/system/display.bmp",bmp,SIZE,false)==0;kfree(bmp);return ok;
+}
 static bool seal_image(void){
+    if(!install_display_sample())return false;
     if(vfs_seal("/boot")||vfs_seal("/system")||vfs_seal("/apps"))return false;
     bool ok=vfs_open("/system/bin/shell",VFS_WRITE|VFS_TRUNCATE)==VFS_EROFS
         &&vfs_chmod("/system/bin/shell",0777)==VFS_EROFS
