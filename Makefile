@@ -116,7 +116,11 @@ test-vfs-atomic: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/vfs-atomic.c src/vfs.c -o $(BUILD)/vfs-atomic-test
 	$(BUILD)/vfs-atomic-test
 
-.PHONY: test-input
+.PHONY: test-input test-elf
+test-elf: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/elf.c -o $(BUILD)/elf-test
+	$(BUILD)/elf-test
+
 test-input: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -ffunction-sections -fdata-sections -Wl,--gc-sections -Isrc -I$(LIMINE) tests/input.c src/form.c src/mouse.c src/framebuffer.c src/account.c -o $(BUILD)/input-test
 	$(BUILD)/input-test

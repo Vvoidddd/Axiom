@@ -260,6 +260,10 @@ allocated from the physical memory manager, then returns those pages.
 - `src/power.c` coordinates account saves, process quiescing, service stops,
   filesystem validation, and block-cache flushes before power transitions.
 - `src/elf.c` validates and maps static x86-64 ELF programs from the VFS.
+  Loadable segments must occupy disjoint pages and cannot be both writable and
+  executable. Entry points must lie in file-backed executable bytes. The loader
+  reserves the stack/guard region, bounds total pages, rejects dynamic loading
+  and executable stacks, and releases private pages/tables after a failed load.
 - `src/ipc.c` provides bounded pipes, process events, and shared memory.
 - `src/package.c` validates ABI-compatible package manifests.
 - `user/` contains user-space `init`, shell, sample app, runtime, and linker layout.
@@ -291,6 +295,7 @@ Run the host VFS regression check with address and undefined-behavior sanitizers
 ```sh
 make test-vfs
 make test-vfs-atomic
+make test-elf
 make test-input
 make test-desktop
 make test-snapshot

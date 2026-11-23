@@ -27,7 +27,7 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     wait_for("[DESKTOP] Task Manager")
     screenshot("memory-tasks")
     assert "CPU exception" not in log.read_text()
-    print("PASS: repeated page-allocation rollback, heap, guarded stacks, MMIO and page-table failures", flush=True)
+    print("PASS: allocation rollback, guarded stacks, MMIO, user W^X and private page-table destruction", flush=True)
 
 for mode in ("bios", "uefi"):
     harness.run(mode, exercise)

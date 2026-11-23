@@ -15,6 +15,8 @@ bool vmm_map(uint64_t virtual_address, uint64_t physical_address, uint64_t flags
 bool vmm_map_user(uint64_t virtual_address, uint64_t physical_address, bool writable, bool executable);
 bool vmm_user_range_valid(uint64_t address,size_t bytes,bool writable);
 bool vmm_space_create(struct vmm_space *space);
+/* Destroy an inactive root's private user page tables, not its mapped data pages. */
+bool vmm_space_destroy(struct vmm_space *space);
 bool vmm_space_map_user(struct vmm_space *space,uint64_t virtual_address,uint64_t physical_address,bool writable,bool executable);
 bool vmm_space_user_range_valid(const struct vmm_space *space,uint64_t address,size_t bytes,bool writable);
 void *vmm_guarded_stack(size_t usable_pages);

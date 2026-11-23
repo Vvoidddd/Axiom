@@ -93,6 +93,7 @@ uint64_t pmm_free_pages(void){return free_count;}
 uint64_t pmm_used_pages(void){return used_count;}
 
 bool vmm_map(uint64_t virtual_address,uint64_t physical_address,uint64_t flags){
+    if((flags&PTE_USER)&&(flags&PTE_WRITE)&&!(flags&PTE_NX))return false;
     uint64_t cr3;__asm__ volatile("mov %%cr3,%0":"=r"(cr3));
     uint64_t*entry=leaf_entry_root(cr3,virtual_address,true,flags);if(!entry)return false;
     *entry=(physical_address&~0xfffull)|PTE_PRESENT|flags;
@@ -116,6 +117,7 @@ bool vmm_space_create(struct vmm_space*space){
     space->root_physical=root;return true;
 }
 bool vmm_space_map_user(struct vmm_space*space,uint64_t virtual_address,uint64_t physical_address,bool writable,bool executable){
+    if(writable&&executable)return false;
     if(!space||!space->root_physical||virtual_address>=0x0000800000000000ull||(virtual_address&0xfff)||(physical_address&0xfff))return false;
     uint64_t flags=PTE_USER|(writable?PTE_WRITE:0)|(executable?0:PTE_NX),*entry=leaf_entry_root(space->root_physical,virtual_address,true,flags);if(!entry)return false;
     *entry=(physical_address&~0xfffull)|PTE_PRESENT|flags;return true;
@@ -125,6 +127,19 @@ bool vmm_space_user_range_valid(const struct vmm_space*space,uint64_t address,si
     if(!bytes)return true;
     if(address>=0x0000800000000000ull||bytes>0x0000800000000000ull-address)return false;
     uint64_t first=address&~0xfffull,last=(address+bytes-1)&~0xfffull;for(uint64_t page=first;;page+=PAGE_SIZE){uint64_t*entry=leaf_entry_root(space->root_physical,page,false,0);if(!entry||!(*entry&PTE_PRESENT)||!(*entry&PTE_USER)||(writable&&!(*entry&PTE_WRITE)))return false;if(page==last)break;}return true;
+}
+static void destroy_user_tables(uint64_t physical,unsigned level){
+    uint64_t*table=physical_pointer(physical);
+    if(level>1)for(unsigned i=0;i<512;i++)if((table[i]&PTE_PRESENT)&&!(table[i]&(1ull<<7)))destroy_user_tables(table[i]&0x000ffffffffff000ull,level-1);
+    pmm_free(physical);
+}
+bool vmm_space_destroy(struct vmm_space*space){
+    if(!space||!space->root_physical)return false;
+    uint64_t current;__asm__ volatile("mov %%cr3,%0":"=r"(current));
+    if((current&~0xfffull)==space->root_physical)return false;
+    uint64_t*root=physical_pointer(space->root_physical);
+    for(unsigned i=0;i<256;i++)if(root[i]&PTE_PRESENT)destroy_user_tables(root[i]&0x000ffffffffff000ull,3);
+    pmm_free(space->root_physical);space->root_physical=0;return true;
 }
 static uint64_t *active_root(void){uint64_t root;__asm__ volatile("mov %%cr3,%0":"=r"(root));return physical_pointer(root&~0xfffull);}
 static bool table_empty(const uint64_t*table){for(unsigned i=0;i<512;i++)if(table[i]&PTE_PRESENT)return false;return true;}
@@ -221,6 +236,16 @@ bool memory_allocation_self_test(void){
         if(mapped!=(fail==3))ok=false;
         if(mapped)rollback_range(address,1,false,false);
         if((*root_entry&PTE_PRESENT)||free_count!=before)ok=false;
+    }
+    if(vmm_map(address,0xfee00000,PTE_USER|PTE_WRITE)||vmm_map_user(0x400000,0xfee00000,true,true))ok=false;
+    for(int fail=0;fail<=3;fail++){
+        struct vmm_space space={0};uint64_t before=free_count;
+        if(!vmm_space_create(&space)){ok=false;break;}
+        if(vmm_space_map_user(&space,0x400000,0xfee00000,true,true))ok=false;
+        allocation_fail_after=fail;
+        bool mapped=vmm_space_map_user(&space,0x400000,0xfee00000,false,true);allocation_fail_after=-1;
+        if(mapped!=(fail==3))ok=false;
+        if(!vmm_space_destroy(&space)||space.root_physical||free_count!=before)ok=false;
     }
     if(kmalloc(SIZE_MAX)||vmm_guarded_stack(SIZE_MAX)||vmm_map_mmio(UINT64_MAX,2))ok=false;
     if(next_virtual!=saved_virtual||heap_used!=bytes_before||free_count!=pages_before)ok=false;
