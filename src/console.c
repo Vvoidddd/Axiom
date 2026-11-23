@@ -10,6 +10,8 @@
 static uint64_t col, row, cols, rows;
 static uint64_t origin_x,origin_y;
 static bool visible=true;
+static uint64_t revision;
+uint64_t console_revision(void){return revision;}
 /* ponytail: bounded character backing store; replace with surfaces for a compositor. */
 static char cells[80][160];
 
@@ -55,11 +57,13 @@ void console_redraw(void){
     for(uint64_t y=0;y<rows;y++)for(uint64_t x=0;x<cols;x++)if(cells[y][x])redraw_cell(x,y,cells[y][x],cells[y][x]=='>'?ACCENT:FG);
 }
 void console_clear(void) {
+    revision++;
     for(unsigned y=0;y<80;y++)for(unsigned x=0;x<160;x++)cells[y][x]=0;
     col=0;row=0;console_redraw();
 }
 
 void console_putc(char c) {
+    revision++;
     if(c=='\b'){console_backspace();return;}
     if(c=='\r'){col=0;return;}
     if (c == '\n') { col = 0; row++; }
@@ -75,6 +79,7 @@ void console_putc(char c) {
 void console_write(const char *text) { while (*text) console_putc(*text++); }
 
 void console_backspace(void) {
+    revision++;
     if (col == 0) { if(row==0)return;row--;col=cols-1; }
     else col--;
     cells[row][col]=0;

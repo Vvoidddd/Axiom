@@ -2,6 +2,10 @@
 #include <stddef.h>
 
 static struct limine_framebuffer *fb;
+static uint32_t *surface;
+static uint64_t clip_left,clip_top,clip_right,clip_bottom;
+static uint64_t damage_left,damage_top,damage_right,damage_bottom;
+static bool damaged;
 
 /* Compact 5x7 glyph rows. Lowercase uses readable small-cap forms. */
 static const uint8_t letters[26][7] = {
@@ -71,22 +75,53 @@ static uint32_t native_colour(uint32_t rgb) {
 
 bool fb_init(struct limine_framebuffer *info) {
     if (!info || !info->address || info->bpp != 32 || info->memory_model != LIMINE_FRAMEBUFFER_RGB) return false;
-    fb = info;
+    fb_pointer_hide();fb = info;surface=0;fb_clip_reset();
     return true;
+}
+
+void fb_clip(uint64_t x,uint64_t y,uint64_t w,uint64_t h){
+    clip_left=x<fb_width()?x:fb_width();clip_top=y<fb_height()?y:fb_height();
+    clip_right=clip_left+(w<fb_width()-clip_left?w:fb_width()-clip_left);
+    clip_bottom=clip_top+(h<fb_height()-clip_top?h:fb_height()-clip_top);
+}
+void fb_clip_reset(void){fb_clip(0,0,fb_width(),fb_height());}
+bool fb_begin_frame(uint32_t*pixels,size_t count){
+    if(!fb||surface||!pixels||!fb->height||fb->width>count/fb->height)return false;
+    fb_pointer_hide();fb_clip_reset();surface=pixels;damaged=false;
+    for(uint64_t y=0;y<fb->height;y++){
+        const volatile uint32_t*row=(void*)((uintptr_t)fb->address+y*fb->pitch);
+        for(uint64_t x=0;x<fb->width;x++)surface[y*fb->width+x]=row[x];
+    }
+    return true;
+}
+void fb_present(void){
+    if(surface&&damaged)for(uint64_t y=damage_top;y<damage_bottom;y++){
+        volatile uint32_t*row=(void*)((uintptr_t)fb->address+y*fb->pitch);
+        for(uint64_t x=damage_left;x<damage_right;x++)row[x]=surface[y*fb->width+x];
+    }
+    surface=0;damaged=false;fb_clip_reset();
 }
 
 void fb_rect(uint64_t x, uint64_t y, uint64_t w, uint64_t h, uint32_t rgb) {
     if (!fb || x >= fb->width || y >= fb->height) return;
-    if (x + w > fb->width) w = fb->width - x;
-    if (y + h > fb->height) h = fb->height - y;
+    uint64_t right=x+(w<fb->width-x?w:fb->width-x),bottom=y+(h<fb->height-y?h:fb->height-y);
+    if(x<clip_left)x=clip_left;
+    if(y<clip_top)y=clip_top;
+    if(right>clip_right)right=clip_right;
+    if(bottom>clip_bottom)bottom=clip_bottom;
+    if(x>=right||y>=bottom)return;
+    if(surface){
+        if(!damaged){damage_left=x;damage_top=y;damage_right=right;damage_bottom=bottom;damaged=true;}
+        else{if(x<damage_left)damage_left=x;if(y<damage_top)damage_top=y;if(right>damage_right)damage_right=right;if(bottom>damage_bottom)damage_bottom=bottom;}
+    }
     uint32_t colour = native_colour(rgb);
-    for (uint64_t py = y; py < y + h; py++) {
-        volatile uint32_t *line = (volatile uint32_t *)((uintptr_t)fb->address + py * fb->pitch);
-        for (uint64_t px = x; px < x + w; px++) line[px] = colour;
+    for (uint64_t py = y; py < bottom; py++) {
+        volatile uint32_t *line = surface?surface+py*fb->width:(volatile uint32_t *)((uintptr_t)fb->address + py * fb->pitch);
+        for (uint64_t px = x; px < right; px++) line[px] = colour;
     }
 }
 
-void fb_clear(uint32_t rgb) { fb_rect(0, 0, fb->width, fb->height, rgb); }
+void fb_clear(uint32_t rgb) { fb_rect(0, 0, fb_width(), fb_height(), rgb); }
 
 static uint32_t pointer_saved[18][12];
 static uint64_t pointer_x,pointer_y;
@@ -100,6 +135,7 @@ void fb_pointer_hide(void){
     pointer_visible=false;
 }
 void fb_pointer_show(uint64_t x,uint64_t y){
+    if(surface)return;
     fb_pointer_hide();if(!fb||x>=fb->width||y>=fb->height)return;
     pointer_x=x;pointer_y=y;
     for(unsigned dy=0;dy<18&&y+dy<fb->height;dy++){

@@ -25,7 +25,7 @@ jobs:
       - name: Check text input and mouse decoding
         run: make test-input
       - name: Check desktop file saves and terminal boundaries
-        run: make test-desktop
+        run: make test-framebuffer test-desktop
       - name: Check snapshot validation and interrupted saves
         run: make test-snapshot test-checkpoint
       - name: Check offline data-image backup and restore

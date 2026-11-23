@@ -98,8 +98,13 @@ After signing in, Axiom opens a mouse-driven desktop with wallpaper and a bottom
 app panel. Desktop icons open Terminal, Files, Editor, Settings, and Task Manager
 with one click. Tab/Shift+Tab or arrows select an icon; Enter/Space opens it.
 Use F1 Home, F2 Terminal, F3 Files, F4 Editor, F5 Settings, and F7 Task Manager.
-Typing on Home also opens Terminal. The X button hides the current
-app; terminal output and the editor draft remain available when you return.
+Typing on Home also opens Terminal. Multiple app windows can stay visible.
+Drag a title bar to move its window; click an exposed window to bring it forward.
+Title-bar controls minimize, maximize/restore, and close. F10 toggles maximization,
+F11 minimizes, and F12 cycles open windows. Clicking the active taskbar button
+minimizes it; clicking again restores it. F1 shows the desktop by minimizing all
+windows. Closing and reopening an app preserves its terminal output/editor draft
+until the session ends. Taskbar underlines distinguish open and minimized apps.
 
 The normal build and boot workflow uses **`axiom.iso` only**. Run `./all` and
 keep your VM pointed at that file. No additional data disk is required to use
@@ -126,9 +131,10 @@ the desktop; the persistence setup below is optional.
   the editor has an unsaved draft. Terminal session commands retain their
   immediate behavior, so save your draft first.
 
-This is a first framebuffer desktop with one visible app at a time, hosted in
-the kernel around the ring-3 shell. A user-space compositor, independent app
-windows, notifications, and an image viewer remain on the roadmap.
+The desktop draws multiple windows through a software backbuffer with clipping,
+falling back to direct rendering if it cannot allocate the buffer. It is hosted
+in the kernel around the ring-3 shell. A user-space compositor, isolated GUI
+applications, notifications, and an image viewer remain on the roadmap.
 The desktop requires at least 960x600; smaller framebuffers keep the console.
 Without a prepared data disk, files and accounts remain RAM-backed and disappear
 on reboot. With one, committed state survives booting the ISO again. This is
@@ -298,6 +304,7 @@ make test-vfs-atomic
 make test-elf
 make test-input
 make test-desktop
+make test-framebuffer
 make test-snapshot
 make test-checkpoint
 python3 tests/data-disk.py

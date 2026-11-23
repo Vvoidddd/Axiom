@@ -26,7 +26,7 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     def command(text):
         # The existing harness types simple names; commands also need spaces/slashes.
         for c in text:
-            key({" ": "spc", "/": "slash", ".": "dot", "-": "minus"}.get(c, c))
+            key({" ": "spc", "/": "slash", ".": "dot", "-": "minus"}.get(c, "shift-" + c.lower() if c.isupper() else c))
         key("ret")
         time.sleep(.15)
 
@@ -89,6 +89,25 @@ def exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, posit
     key("ret")
     assert log.read_text().count("[DESKTOP-SAVED] /users/Void/work.txt") == 2
     screenshot("replaced-file")
+
+    # Separate windows retain positions and focus, with real PS/2 dragging.
+    key("f1"); key("f2"); key("f3")
+    click(200, 80); hmp("mouse_button 1"); time.sleep(.1)
+    for _ in range(2):
+        hmp("mouse_move 50 30"); position[0] += 50; position[1] += 30; time.sleep(.15)
+    hmp("mouse_button 0"); time.sleep(.2)
+    windows = screenshot("overlapping-windows")
+    assert pixel(windows, 32, 64) == bytes.fromhex("25303c"), "Background Terminal not visible"
+    assert pixel(windows, 132, 124) == bytes.fromhex("293b50"), "Files did not move"
+    click(60, 80); time.sleep(.15)
+    assert pixel(screenshot("window-focus"), 32, 64) == bytes.fromhex("293b50")
+    click(950, 200); key("f10"); time.sleep(.15)
+    assert pixel(screenshot("maximized"), 8, 42) == bytes.fromhex("293b50")
+    key("f10"); time.sleep(.15)
+    assert pixel(screenshot("restored-window"), 132, 124) == bytes.fromhex("293b50")
+    key("f11"); time.sleep(.15)
+    assert pixel(screenshot("minimized"), 950, 230) == bytes.fromhex("1b3954")
+    key("f3"); click(974, 139)  # Close Files; its app state can still be reopened.
 
     key("f5")
     click(245, 180)  # Slate wallpaper
