@@ -5,6 +5,7 @@
 #include <stdbool.h>
 
 void console_init(void);
+void console_set_output(void (*output)(char));
 void console_prepare(void);
 void console_clear(void);
 void console_putc(char c);

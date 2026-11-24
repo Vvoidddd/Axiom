@@ -3,6 +3,7 @@
 #include "log.h"
 #include "memory.h"
 #include <stddef.h>
+extern const unsigned char user_abiprobe_start[],user_abiprobe_end[];
 struct embedded_file{const char*path;const char*data;};
 static const struct embedded_file image[]={
  {"/system/welcome.txt","Welcome to Axiom. Your system. Your rules.\n"},
@@ -41,4 +42,4 @@ static bool seal_image(void){
     return ok;
 }
 static bool install_binary(const char*path,const unsigned char*start,const unsigned char*end){int fd=vfs_open(path,VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0)return false;size_t size=(size_t)(end-start);bool ok=vfs_write(fd,start,size)==(long)size;ok=vfs_close(fd)==0&&ok;return ok&&vfs_chmod(path,0755)==0;}
-bool initramfs_load(void){int e=vfs_mkdir("/system/packages",0755);if(e&&e!=VFS_EEXIST)return false;e=vfs_mkdir("/system/services",0755);if(e&&e!=VFS_EEXIST)return false;for(unsigned i=0;i<sizeof(image)/sizeof(image[0]);i++){int fd=vfs_open(image[i].path,VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0)return false;size_t n=0;while(image[i].data[n])n++;if(vfs_write(fd,image[i].data,n)!=(long)n){vfs_close(fd);return false;}vfs_close(fd);}e=vfs_mkdir("/system/bin",0755);if(e&&e!=VFS_EEXIST)return false;return install_binary("/system/bin/init",user_init_start,user_init_end)&&install_binary("/system/bin/shell",user_shell_start,user_shell_end)&&install_binary("/apps/hello",user_hello_start,user_hello_end)&&install_binary("/system/bin/loggerd",user_loggerd_start,user_loggerd_end)&&install_binary("/system/bin/deviced",user_deviced_start,user_deviced_end)&&seal_image();}
+bool initramfs_load(void){int e=vfs_mkdir("/system/packages",0755);if(e&&e!=VFS_EEXIST)return false;e=vfs_mkdir("/system/services",0755);if(e&&e!=VFS_EEXIST)return false;for(unsigned i=0;i<sizeof(image)/sizeof(image[0]);i++){int fd=vfs_open(image[i].path,VFS_WRITE|VFS_CREATE|VFS_TRUNCATE);if(fd<0)return false;size_t n=0;while(image[i].data[n])n++;if(vfs_write(fd,image[i].data,n)!=(long)n){vfs_close(fd);return false;}vfs_close(fd);}e=vfs_mkdir("/system/bin",0755);if(e&&e!=VFS_EEXIST)return false;return install_binary("/system/bin/abiprobe",user_abiprobe_start,user_abiprobe_end)&&install_binary("/system/bin/init",user_init_start,user_init_end)&&install_binary("/system/bin/shell",user_shell_start,user_shell_end)&&install_binary("/apps/hello",user_hello_start,user_hello_end)&&install_binary("/system/bin/loggerd",user_loggerd_start,user_loggerd_end)&&install_binary("/system/bin/deviced",user_deviced_start,user_deviced_end)&&seal_image();}

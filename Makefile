@@ -27,7 +27,7 @@ USER_CFLAGS := -std=gnu11 -O2 -Wall -Wextra -Werror -ffreestanding -fno-stack-pr
 USER_LDFLAGS := -m elf_x86_64 -nostdlib -static -z noexecstack -T user/linker.ld
 USER_COMMON := $(BUILD)/user/crt0.o $(BUILD)/user/libaxiom.o
 USER_BINS := $(BUILD)/user/init.elf $(BUILD)/user/shell.elf $(BUILD)/user/hello.elf \
-	$(BUILD)/user/loggerd.elf $(BUILD)/user/deviced.elf
+	$(BUILD)/user/loggerd.elf $(BUILD)/user/deviced.elf $(BUILD)/user/abiprobe.elf
 
 .PHONY: all iso run-bios run-uefi test clean distclean
 all: $(KERNEL)
@@ -57,6 +57,9 @@ $(BUILD)/user/shell.elf: $(USER_COMMON) $(BUILD)/user/shell.o user/linker.ld
 
 $(BUILD)/user/hello.elf: $(USER_COMMON) $(BUILD)/user/hello.o user/linker.ld
 	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/hello.o -o $@
+
+$(BUILD)/user/abiprobe.elf: $(USER_COMMON) $(BUILD)/user/abiprobe.o user/linker.ld
+	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/abiprobe.o -o $@
 
 $(BUILD)/user/loggerd.elf: $(USER_COMMON) $(BUILD)/user/loggerd.o user/linker.ld
 	$(LD) $(USER_LDFLAGS) $(USER_COMMON) $(BUILD)/user/loggerd.o -o $@
@@ -127,6 +130,11 @@ test-input: $(LIMINE)/limine.h
 
 .PHONY: test-desktop test-framebuffer
 .PHONY: test-picture
+.PHONY: test-block
+test-block: $(LIMINE)/limine.h
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/block.c src/block.c -o $(BUILD)/block-test
+	$(BUILD)/block-test
+
 test-picture: $(LIMINE)/limine.h
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -g -fsanitize=address,undefined -Isrc -I$(LIMINE) tests/picture.c src/picture.c src/vfs.c -o $(BUILD)/picture-test
 	$(BUILD)/picture-test

@@ -7,6 +7,12 @@ Axiom v0.5 is a small educational x86-64 operating system written in freestandin
 boots with Limine on BIOS and UEFI, shows a branded splash and module-loading
 screen, discovers system hardware, and opens an interactive graphical console.
 
+The three-second boot menu also offers authenticated text and serial recovery.
+Missing framebuffer support falls back to text recovery automatically. See
+[Recovery](docs/recovery.md) for login and data-repair limits, and
+[Development](docs/development.md) for driver contracts, syscall ABI, the app SDK,
+debugging and contribution instructions.
+
 The startup screen lists every required subsystem before testing. Each item
 begins as red `[ NOT TESTED ]`, changes to yellow `[ TESTING ]`, and becomes
 green `[ OK ]` only after passing. A failed critical check remains red and stops
@@ -310,6 +316,7 @@ make test-input
 make test-desktop
 make test-framebuffer
 make test-picture
+make test-block
 make test-snapshot
 make test-checkpoint
 python3 tests/data-disk.py

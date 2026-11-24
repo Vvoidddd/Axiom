@@ -10,6 +10,8 @@
 static uint64_t col, row, cols, rows;
 static uint64_t origin_x,origin_y;
 static bool visible=true;
+static void (*output_character)(char);
+void console_set_output(void (*output)(char)){output_character=output;}
 static uint64_t revision;
 uint64_t console_revision(void){return revision;}
 /* ponytail: bounded character backing store; replace with surfaces for a compositor. */
@@ -32,6 +34,7 @@ static void scroll(void) {
 
 void console_init(void) {
     console_prepare();
+    fb_clip_reset();fb_clear(BG);
     console_clear();
 }
 
@@ -63,6 +66,7 @@ void console_clear(void) {
 }
 
 void console_putc(char c) {
+    if(output_character&&c!='\b')output_character(c);
     revision++;
     if(c=='\b'){console_backspace();return;}
     if(c=='\r'){col=0;return;}
@@ -79,6 +83,7 @@ void console_putc(char c) {
 void console_write(const char *text) { while (*text) console_putc(*text++); }
 
 void console_backspace(void) {
+    if(output_character){output_character('\b');output_character(' ');output_character('\b');}
     revision++;
     if (col == 0) { if(row==0)return;row--;col=cols-1; }
     else col--;

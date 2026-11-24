@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 void log_init(void);
+void log_console_char(char c);
 void log_write(const char *level, const char *message);
 void log_hex(uint64_t value);
 void log_dump(void);

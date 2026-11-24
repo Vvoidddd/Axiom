@@ -1,4 +1,5 @@
 #include "checkpoint.h"
+#include "recovery.h"
 #include "desktop.h"
 #include "form.h"
 #include <stdbool.h>
@@ -30,6 +31,11 @@
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(6);
+static bool text_recovery;
+__attribute__((used, section(".limine_requests")))
+static volatile struct limine_executable_cmdline_request cmdline_request = {
+    .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST_ID, .revision = 0
+};
 
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_framebuffer_request framebuffer_request = {
@@ -175,6 +181,7 @@ static void cmd_sysinfo(const char *args) {
     cmd_cpu("");
     cmd_ram("");
     struct limine_framebuffer *f = fb_info();
+    if(!f){console_write("DISPLAY: SERIAL CONSOLE\n");return;}
     console_write("DISPLAY: "); console_write_u64(f->width); console_write(" X ");
     console_write_u64(f->height); console_write(" X "); console_write_u64(f->bpp); console_putc('\n');
 }
@@ -183,7 +190,8 @@ static bool boot_memory_test_ok;
 
 static void cmd_modules(const char *args) {
     (void)args;
-    console_write("[OK] LIMINE BOOT PROTOCOL\n[OK] FRAMEBUFFER DISPLAY\n");
+    console_write("[OK] LIMINE BOOT PROTOCOL\n");
+    console_write(fb_info()?"[OK] FRAMEBUFFER DISPLAY\n":"[OK] SERIAL RECOVERY CONSOLE\n");
     console_write(memmap_request.response ? "[OK] PHYSICAL MEMORY MAP\n" : "[FAIL] PHYSICAL MEMORY MAP\n");
     console_write("[OK] CPU DISCOVERY\n");
     console_write(mp_request.response ? "[OK] MULTIPROCESSOR TOPOLOGY\n" : "[WARN] SINGLE CPU FALLBACK\n");
@@ -342,34 +350,6 @@ static void execute(char *line) {
 }
 void kernel_execute_user_command(char *line){execute(line);}
 
-static void shell(void) {
-    static char history[16][128];static size_t history_count;
-    char line[128];
-    for (;;) {
-        size_t length = 0,cursor=0,history_position=history_count;line[0]=0;
-        console_write("axiom> ");
-        for (;;) {
-            struct key_event event=keyboard_read_event();if(!event.pressed)continue;char c=event.character;
-            if(c=='\n'){console_putc('\n');line[length]=0;if(length){size_t slot=history_count%16;for(size_t i=0;i<=length;i++)history[slot][i]=line[i];history_count++;}execute(line);break;}
-            if(event.special==KEY_LEFT){if(cursor){console_backspace();cursor--;}continue;}
-            if(event.special==KEY_RIGHT){if(cursor<length)console_putc(line[cursor++]);continue;}
-            if(event.special==KEY_HOME){while(cursor){console_backspace();cursor--;}continue;}
-            if(event.special==KEY_END){while(cursor<length)console_putc(line[cursor++]);continue;}
-            if(event.special==KEY_UP||event.special==KEY_DOWN){
-                while(cursor<length) console_putc(line[cursor++]);
-                while(length){console_backspace();length--;cursor--;}
-                size_t earliest=history_count>16?history_count-16:0;
-                if(event.special==KEY_UP&&history_position>earliest)history_position--;
-                if(event.special==KEY_DOWN&&history_position<history_count)history_position++;
-                if(history_position<history_count){const char *source=history[history_position%16];while(*source&&length+1<sizeof(line)){line[length++]=*source;console_putc(*source++);}cursor=length;}line[length]=0;continue;
-            }
-            if(c=='\b'){if(cursor){for(size_t i=cursor-1;i<length;i++)line[i]=line[i+1];cursor--;length--;console_backspace();for(size_t i=cursor;i<length;i++)console_putc(line[i]);console_putc(' ');for(size_t i=cursor;i<=length;i++)console_backspace();}continue;}
-            if(event.special==KEY_DELETE){if(cursor<length){for(size_t i=cursor;i<length;i++)line[i]=line[i+1];length--;for(size_t i=cursor;i<length;i++)console_putc(line[i]);console_putc(' ');for(size_t i=cursor;i<=length;i++)console_backspace();}continue;}
-            if(c=='\t'||!c)continue;
-            if(length+1<sizeof(line)){for(size_t i=length;i>cursor;i--)line[i]=line[i-1];line[cursor]=c;length++;line[length]=0;for(size_t i=cursor;i<length;i++)console_putc(line[i]);cursor++;for(size_t i=cursor;i<length;i++)console_backspace();}
-        }
-    }
-}
 
 static void splash(void) {
     const char *title = "AXIOM";
@@ -423,7 +403,7 @@ static void loading_screen(void) {
     fb_rect(120,550,fb_width()-240,14,0x252b34);pit_wait_ms(800);
     bool failed=false,passed;
     load_begin(0);passed=LIMINE_BASE_REVISION_SUPPORTED(base_revision);load_finish(0,passed);failed|=!passed;
-    load_begin(1);passed=fb_info()!=0&&fb_width()>0&&fb_height()>0;load_finish(1,passed);failed|=!passed;
+    load_begin(1);passed=text_recovery||(fb_info()!=0&&fb_width()>0&&fb_height()>0);load_finish(1,passed);failed|=!passed;
     load_begin(2);passed=memmap_request.response&&hhdm_request.response;load_finish(2,passed);failed|=!passed;
     load_begin(3);
     system_init(memmap_request.response, mp_request.response);
@@ -436,7 +416,7 @@ static void loading_screen(void) {
     boot_memory_test_ok = system_memory_test(&tested, &failure);
     passed=boot_memory_test_ok&&pmm_free_pages()>0;load_finish(6,passed);failed|=!passed;
     load_begin(7);pit_wait_ms(50);load_finish(7,true);
-    load_begin(8);passed=hardware_ps2_controller_present();load_finish(8,passed);failed|=!passed;
+    load_begin(8);passed=text_recovery||hardware_ps2_controller_present();load_finish(8,passed);failed|=!passed;
     load_begin(9);passed=storage_init();load_finish(9,passed);failed|=!passed;
     load_begin(10);vfs_init();passed=vfs_stat_path("/system",&(struct vfs_stat){0})==0&&vfs_self_test();load_finish(10,passed);failed|=!passed;
     load_begin(11);passed=initramfs_load();load_finish(11,passed);failed|=!passed;
@@ -451,7 +431,7 @@ static void loading_screen(void) {
     passed=arch_interrupt_count(32)>0;
     load_finish(14,passed);failed|=!passed;
     load_begin(15);passed=process_user_mode_self_test();load_finish(15,passed);failed|=!passed;
-    load_begin(16);passed=passed&&process_scheduler_self_test();load_finish(16,passed);failed|=!passed;
+    load_begin(16);passed=passed&&process_scheduler_self_test()&&process_syscall_self_test();load_finish(16,passed);failed|=!passed;
     load_begin(17);account_init();passed=account_prepare_recovery()&&account_create_service("system-logger",0)==0&&account_create_service("device-manager",0)==0&&account_recovery_self_test()&&account_self_test()&&account_database_recovery_self_test();if(passed)LOG_INFO("random recovery credential and database fallback verified");load_finish(17,passed);failed|=!passed;
     load_begin(18);passed=config_system_init()&&config_self_test();load_finish(18,passed);failed|=!passed;
     load_begin(19);passed=log_enable_persistence()&&log_self_test();load_finish(19,passed);failed|=!passed;
@@ -471,11 +451,15 @@ static void show_initial_recovery_key(void){char key[33];if(!account_take_recove
 static bool concurrent_login_probe(uint64_t processor_id){(void)processor_id;return account_authenticate("parallel-login","concurrent-pass",hardware_uptime_ms()+100000)>=0;}
 
 void kmain(void) {
-    if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision) || !framebuffer_request.response ||
-        framebuffer_request.response->framebuffer_count == 0 ||
-        !fb_init(framebuffer_request.response->framebuffers[0])) machine_halt();
+    if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision)) machine_halt();
+    const char *options=cmdline_request.response?cmdline_request.response->cmdline:"";
+    bool serial_only=options&&streq(options,"recovery-serial");
+    text_recovery=serial_only||(options&&streq(options,"recovery"));
+    if(serial_only||!framebuffer_request.response||!framebuffer_request.response->framebuffer_count||
+       !fb_init(framebuffer_request.response->framebuffers[0]))text_recovery=true;
     console_prepare();
     log_init();
+    if(text_recovery)console_set_output(log_console_char);
     splash();
     loading_screen();
     LOG_INFO("ring 3 ELF syscall and IPC probe passed");
@@ -493,8 +477,10 @@ void kmain(void) {
         for(unsigned i=0;i<sizeof(discarded_key);i++)discarded_key[i]=0;
         if(!account_load()||!config_system_init()){console_init();console_write("SAVED ACCOUNT OR CONFIGURATION DATA INVALID.\n");machine_halt();}
     }
-    first_boot_setup();show_initial_recovery_key();
+    /* Restored accounts must never reopen first-boot enrollment, even if every admin is disabled. */
+    if(restored!=2){if(text_recovery)recovery_setup();else{first_boot_setup();show_initial_recovery_key();}}
     if(!checkpoint_save()){console_init();console_write("INITIAL DATA DISK SAVE FAILED.\n");machine_halt();}
+    if(text_recovery)recovery_shell();
     for(;;){
         graphical_login();
         console_init();
@@ -505,7 +491,7 @@ void kmain(void) {
         desktop_stop();
         config_user_end();
         account_end_session();
-        if(status<0){LOG_ERROR("user-space init failed; entering kernel recovery console");console_write("AXIOM KERNEL RECOVERY CONSOLE\nTYPE HELP FOR COMMANDS.\n\n");shell();}
+        if(status<0){LOG_ERROR("user-space init failed; entering authenticated recovery");recovery_shell();}
         LOG_INFO(status==65?"session locked; returning to login":"session logged out; returning to login");
     }
 }

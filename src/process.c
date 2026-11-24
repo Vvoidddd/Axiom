@@ -215,6 +215,22 @@ bool process_user_mode_self_test(void){
     return user_mode_ok;
 }
 bool process_user_mode_ready(void){return user_mode_ok;}
+bool process_syscall_self_test(void){
+    struct user_image image;if(elf_load_vfs("/system/bin/abiprobe",&image))return false;
+    int slot=create_user_process("abiprobe",&image,1000,1000);
+    bool ok=false;
+    if(slot>=0){
+        uint32_t old=current_slot;current_slot=(uint32_t)slot;scheduler_active=true;
+        table[slot].info.state=PROCESS_RUNNING;apply_credentials(&table[slot].info);
+        uint64_t result=arch_enter_user(image.entry,image.stack_top,image.space.root_physical);
+        scheduler_active=false;current_slot=old;table[old].info.state=PROCESS_RUNNING;apply_credentials(&table[old].info);
+        ok=result==1&&table[slot].info.state==PROCESS_ZOMBIE&&table[slot].info.exit_status==0;
+        table[slot].occupied=false;
+    }
+    if(!vmm_space_destroy(&image.space))ok=false;
+    else for(uint32_t i=0;i<image.page_count;i++)pmm_free(image.pages[i].physical_address);
+    log_write(ok?"PASS":"FAIL","RING3 SYSCALL FUZZ 4096 CASES");return ok;
+}
 bool process_scheduler_self_test(void){
     uint8_t code1[]={0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,1,0,0,0,0xcd,0x80,0xf4};
     uint8_t code2[]={0x48,0xc7,0xc0,4,0,0,0,0x48,0xc7,0xc7,5,0,0,0,0xcd,0x80,0x48,0xc7,0xc0,0x11,0xa7,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0x48,0xc7,0xc1,0,0,0x20,0,0x48,0xff,0xc9,0x75,0xfb,0x48,0xc7,0xc0,5,0,0,0,0x48,0xc7,0xc7,2,0,0,0,0xcd,0x80,0xf4};

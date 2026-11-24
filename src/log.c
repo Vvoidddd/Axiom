@@ -23,6 +23,7 @@ static void copy(char*d,const char*s,size_t cap){size_t n=0;if(!cap)return;while
 static void append(char*d,const char*s,size_t cap){size_t n=length(d);copy(d+n,s,n<cap?cap-n:0);}
 static void serial_char(char c){while((inb(0x3fd)&0x20u)==0){}outb(0x3f8,(uint8_t)c);}
 static void serial_text(const char*s){while(*s)serial_char(*s++);}
+void log_console_char(char c){if(c=='\n')serial_char('\r');serial_char(c);}
 static void copy_line(char*out,const char*level,const char*message){unsigned n=0;out[n++]='[';while(*level&&n+1<LOG_LENGTH)out[n++]=*level++;if(n+2<LOG_LENGTH){out[n++]=']';out[n++]=' ';}while(*message&&n+1<LOG_LENGTH)out[n++]=*message++;out[n]=0;}
 static void decimal(uint64_t value,char*out,size_t cap){char r[24];size_t n=0;do{r[n++]=(char)('0'+value%10);value/=10;}while(value&&n<sizeof(r));size_t at=0;while(n&&at+1<cap)out[at++]=r[--n];out[at]=0;}
 static void root(struct vfs_security_context*saved){vfs_capture_security_context(saved);vfs_set_security_context(0,0,0,0,0022,CAP_ALL);}

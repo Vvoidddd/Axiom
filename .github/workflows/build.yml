@@ -19,7 +19,7 @@ jobs:
       - name: Build Axiom
         run: ./all
       - name: Check VFS boundaries and failed-save rollback
-        run: make test-vfs test-vfs-atomic
+        run: make test-block test-vfs test-vfs-atomic
       - name: Check ELF permissions, malformed inputs and failed-load cleanup
         run: make test-elf
       - name: Check text input and mouse decoding
@@ -32,6 +32,10 @@ jobs:
         run: python3 tests/data-disk.py
       - name: Check real page-table allocation rollback on BIOS and UEFI
         run: python3 tests/memory.py axiom.iso build/memory-test
+      - name: Check authenticated text and serial recovery
+        run: python3 tests/recovery.py axiom.iso build/recovery-test
+      - name: Check recovery after a broken user-space init
+        run: python3 tests/recovery-init.py axiom.iso build/recovery-init-test
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}

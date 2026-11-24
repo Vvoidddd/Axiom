@@ -48,6 +48,7 @@ bool process_self_test(void);
 bool process_user_mode_self_test(void);
 bool process_user_mode_ready(void);
 bool process_scheduler_self_test(void);
+bool process_syscall_self_test(void);
 /* Runs one authenticated user session and returns its shell exit status. */
 int process_launch_init(void);
 bool process_runtime_ready(void);

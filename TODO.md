@@ -7,6 +7,11 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Preserve authenticated text recovery when the framebuffer is unavailable or user-space init fails; provide boot-menu text/serial modes, hidden credential entry, recovery-key login and administrator-only maintenance access.
+- [x] Keep first-account enrollment closed on restored data disks when administrators are disabled; recover through the disk's existing recovery credential instead.
+- [x] Document driver APIs, syscall ABI, app SDK, debugging, contribution, and recovery in `docs/development.md` and `docs/recovery.md`.
+- [x] Validate block I/O bounds before cache access, reject removed devices, and preserve correctness across partial failed reads, dirty eviction failures and flush retries, with sanitizer regression tests.
+- [x] Fuzz parsers and syscall inputs; test low-memory, disk-error, and device-loss paths. Coverage includes ELF/BMP header mutation, snapshot rejection, 4096 real ring-3 syscall cases per boot, allocation rollback, interrupted checkpoints, block-cache read/write failures and removed devices.
 - [x] Add a graphical image viewer, packaged display sample, and content-validated BMP opening from Files, with fit-to-window scaling, permission checks, bounded decoding, and failed-load preservation.
 - [x] Add simultaneously visible desktop windows with independent positions, title-bar dragging, stacking/focus, minimize/maximize/restore, close/reopen, and F10-F12 keyboard controls.
 - [x] Composite the desktop into a bounded software backbuffer with clipping and damaged-region presentation; retain a direct-render fallback when surface allocation fails.
@@ -179,6 +184,11 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 
 ## Phase 4: Input, Graphics, and Desktop
 
+Progress (2026-11-23): authenticated text/serial recovery and the developer/API
+documentation are implemented. Block-cache failure and device-loss handling now
+has sanitizer coverage. These do not complete the installer, signed updates,
+hardware drivers, user-space desktop, audio, or networking tasks below.
+
 - [ ] Add USB host-controller support, beginning with xHCI.
 - [ ] Add USB HID keyboard and mouse drivers plus a unified input-event API.
 - [ ] Introduce a graphics abstraction independent of Limine's boot framebuffer.
@@ -190,7 +200,6 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 - [ ] Move the desktop's multiple app windows into isolated user-space applications.
 - [ ] Add safe task termination with ownership checks, protected system/session processes, and explicit unsaved-work handling.
 - [ ] Add clipboard, drag and drop, keyboard shortcuts, accessibility, and screen capture.
-- [ ] Preserve a text-only recovery mode when graphics or user space fails.
 
 ## Phase 5: Sound and Media
 
@@ -214,10 +223,8 @@ flows. This is a RAM-backed runtime split, not a persistent installer or updater
 
 - [ ] Finish kernel W xor X protection and broaden syscall validation, user/kernel isolation, and stack-guard fault tests.
 - [ ] Add capability or permission boundaries for devices, files, network, and desktop IPC.
-- [ ] Fuzz parsers and syscall inputs; test low-memory, disk-error, and device-loss paths.
 - [ ] Add reproducible builds, versioned disk images, release notes, and upgrade tooling.
 - [ ] Test on multiple CPU vendors, core counts, RAM sizes, resolutions, and real machines.
-- [ ] Document driver APIs, syscall ABI, app SDK, debugging, contribution, and recovery.
 
 ## Current Next Milestone
 

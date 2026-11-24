@@ -1,4 +1,8 @@
 .section .rodata
+.global user_abiprobe_start,user_abiprobe_end
+user_abiprobe_start:
+.incbin "build/user/abiprobe.elf"
+user_abiprobe_end:
 .global user_init_start,user_init_end,user_shell_start,user_shell_end,user_hello_start,user_hello_end,user_loggerd_start,user_loggerd_end,user_deviced_start,user_deviced_end
 user_init_start:
 .incbin "build/user/init.elf"

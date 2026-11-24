@@ -18,7 +18,7 @@ ovmf = os.environ.get("OVMF") or next((p for p in (
     "/usr/share/edk2/x64/OVMF_CODE.fd") if Path(p).is_file()), "/usr/share/OVMF/OVMF_CODE.fd")
 
 
-def run(firmware, exercise=None, extra_args=(), existing=False):
+def run(firmware, exercise=None, extra_args=(), existing=False, expected_errors=()):
     saved_log = out / f"{firmware}.log"
     with tempfile.TemporaryDirectory() as tmp:
         # Keep QEMU's actively written log off Windows/OneDrive mounts.
@@ -142,7 +142,8 @@ def run(firmware, exercise=None, extra_args=(), existing=False):
                     if exercise:
                         position[:] = [512, 384]
                         exercise(qmp, hmp, wait_for, key, type_text, click, screenshot, pixel, position, log)
-                    assert "[ERROR]" not in log.read_text()
+                    errors_found = [line for line in log.read_text().splitlines() if "[ERROR]" in line]
+                    assert sorted(errors_found) == sorted(expected_errors), errors_found
                     qmp("quit")
                     process.wait(timeout=5)
             finally:
