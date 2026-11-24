@@ -36,6 +36,8 @@ jobs:
         run: python3 tests/recovery.py axiom.iso build/recovery-test
       - name: Check recovery after a broken user-space init
         run: python3 tests/recovery-init.py axiom.iso build/recovery-init-test
+      - name: Check safe-mode sessions and service policy
+        run: python3 tests/safe-mode.py axiom.iso build/safe-mode-test
       - uses: actions/upload-artifact@v7
         with:
           name: axiom-${{ github.sha }}

@@ -7,6 +7,8 @@ tests on both BIOS and UEFI.
 
 ## Completed
 
+- [x] Add a boot-menu safe mode that runs the authenticated ring-3 shell without the desktop, sample-app autostart, or background services; reject service starts until normal reboot and retain the policy across logout/login.
+- [x] Stop stationary mouse-pointer redraws and keep the pointer visible while composing buffered frames, with background restoration and idle-write regression checks.
 - [x] Preserve authenticated text recovery when the framebuffer is unavailable or user-space init fails; provide boot-menu text/serial modes, hidden credential entry, recovery-key login and administrator-only maintenance access.
 - [x] Keep first-account enrollment closed on restored data disks when administrators are disabled; recover through the disk's existing recovery credential instead.
 - [x] Document driver APIs, syscall ABI, app SDK, debugging, contribution, and recovery in `docs/development.md` and `docs/recovery.md`.
@@ -164,7 +166,7 @@ runtime, serial-log, and framebuffer-screenshot checks pass.
 ## Phase 3B: Core System Services
 
 - [ ] Add software installation, removal, dependency resolution, signed updates, rollback, and an offline recovery environment.
-- [ ] Provide safe mode, single-user recovery mode, emergency shell, and booting a previous known-good system version.
+- [ ] Add booting a previous known-good system version. Safe mode and authenticated single-user/emergency recovery are completed above.
 - [ ] Create end-to-end installation tests covering blank disks, upgrades, multiple users, admin recovery, and failed updates.
 
 Progress log (2026-09-27): the first half is implemented and verified in BIOS

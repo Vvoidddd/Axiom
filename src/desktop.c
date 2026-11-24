@@ -228,7 +228,8 @@ static void draw_tasks(void){
 }
 static void draw(void){
     enum app focused=app;
-    fb_pointer_hide();fb_begin_frame(backbuffer,(size_t)width*height);fb_clear(wallpaper);
+    if(!fb_begin_frame(backbuffer,(size_t)width*height))fb_pointer_hide();
+    fb_clear(wallpaper);
     fb_rect(width*2/3,38,width/3,height-86,0x1b3954);
     fb_rect(0,0,width,38,0x101c2a);
     text(20,12,"AXIOM",0xf4f7fa);
@@ -364,7 +365,7 @@ static long click(void){
 long desktop_poll(void){
     struct mouse_event mouse;unsigned budget=32;
     while(budget--&&mouse_poll_event(&mouse)){
-        fb_pointer_hide();mx+=mouse.dx;my+=mouse.dy;
+        mx+=mouse.dx;my+=mouse.dy;
         if(mx<0)mx=0;
         if(my<0)my=0;
         if(mx>=width)mx=width-1;

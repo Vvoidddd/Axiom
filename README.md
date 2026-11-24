@@ -7,7 +7,8 @@ Axiom v0.5 is a small educational x86-64 operating system written in freestandin
 boots with Limine on BIOS and UEFI, shows a branded splash and module-loading
 screen, discovers system hardware, and opens an interactive graphical console.
 
-The three-second boot menu also offers authenticated text and serial recovery.
+The three-second boot menu also offers safe mode and authenticated text/serial recovery.
+Safe mode runs the user shell without the desktop or background services.
 Missing framebuffer support falls back to text recovery automatically. See
 [Recovery](docs/recovery.md) for login and data-repair limits, and
 [Development](docs/development.md) for driver contracts, syscall ABI, the app SDK,

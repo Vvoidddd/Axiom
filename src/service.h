@@ -9,6 +9,8 @@ enum service_state {SERVICE_STOPPED,SERVICE_STARTING,SERVICE_RUNNING,SERVICE_FAI
 struct service_info {char name[32],executable[96],account[32];enum service_state state;uint32_t pid,restarts,restart_limit,heartbeat_timeout_ms;uint64_t started_ms,last_heartbeat_ms;int last_status;bool enabled,restart_always,manual_stop;};
 
 bool service_init(void);
+bool service_enter_safe_mode(void);
+bool service_safe_mode(void);
 bool service_ensure_started(void);
 void service_resume_after_pause(uint64_t milliseconds);
 bool service_supervise(uint64_t now_ms);

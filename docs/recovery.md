@@ -1,5 +1,16 @@
 # Recovery
 
+**Axiom safe mode** starts the normal authenticated ring-3 shell without the
+desktop, bundled sample-app autostart, or background services. Account permissions
+and capability elevation still apply. Service start/restart is refused even after
+elevation, and logging out and back in keeps safe mode active. Reboot using the
+normal Axiom menu entry to restore normal startup. Kernel drivers and required
+startup checks still run; this is a reduced user session, not a driver-free boot.
+If no framebuffer is available, authenticated serial recovery takes precedence.
+
+`python3 tests/safe-mode.py axiom.iso build/safe-mode-test` validates safe boot,
+service-start denial, and repeat login on BIOS and UEFI.
+
 The boot menu offers **Axiom text recovery** and **Axiom serial recovery**.
 Select one during the three-second menu timeout. Both run a kernel maintenance
 console without starting the desktop or user-space session. Serial recovery

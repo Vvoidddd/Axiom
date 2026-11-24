@@ -6,6 +6,8 @@ static uint32_t *surface;
 static uint64_t clip_left,clip_top,clip_right,clip_bottom;
 static uint64_t damage_left,damage_top,damage_right,damage_bottom;
 static bool damaged;
+static void pointer_background(uint32_t*pixels);
+static void pointer_overlay(uint32_t*pixels);
 
 /* Compact 5x7 glyph rows. Lowercase uses readable small-cap forms. */
 static const uint8_t letters[26][7] = {
@@ -87,14 +89,16 @@ void fb_clip(uint64_t x,uint64_t y,uint64_t w,uint64_t h){
 void fb_clip_reset(void){fb_clip(0,0,fb_width(),fb_height());}
 bool fb_begin_frame(uint32_t*pixels,size_t count){
     if(!fb||surface||!pixels||!fb->height||fb->width>count/fb->height)return false;
-    fb_pointer_hide();fb_clip_reset();surface=pixels;damaged=false;
+    fb_clip_reset();surface=pixels;damaged=false;
     for(uint64_t y=0;y<fb->height;y++){
         const volatile uint32_t*row=(void*)((uintptr_t)fb->address+y*fb->pitch);
         for(uint64_t x=0;x<fb->width;x++)surface[y*fb->width+x]=row[x];
     }
+    pointer_background(surface);
     return true;
 }
 void fb_present(void){
+    if(surface)pointer_overlay(surface);
     if(surface&&damaged)for(uint64_t y=damage_top;y<damage_bottom;y++){
         volatile uint32_t*row=(void*)((uintptr_t)fb->address+y*fb->pitch);
         for(uint64_t x=damage_left;x<damage_right;x++)row[x]=surface[y*fb->width+x];
@@ -127,7 +131,7 @@ static uint32_t pointer_saved[18][12];
 static uint64_t pointer_x,pointer_y;
 static bool pointer_visible;
 void fb_pointer_hide(void){
-    if(!pointer_visible||!fb)return;
+    if(surface||!pointer_visible||!fb)return;
     for(unsigned y=0;y<18&&pointer_y+y<fb->height;y++){
         volatile uint32_t*row=(void*)((uintptr_t)fb->address+(pointer_y+y)*fb->pitch);
         for(unsigned x=0;x<12&&pointer_x+x<fb->width;x++)row[pointer_x+x]=pointer_saved[y][x];
@@ -136,6 +140,7 @@ void fb_pointer_hide(void){
 }
 void fb_pointer_show(uint64_t x,uint64_t y){
     if(surface)return;
+    if(pointer_visible&&pointer_x==x&&pointer_y==y)return;
     fb_pointer_hide();if(!fb||x>=fb->width||y>=fb->height)return;
     pointer_x=x;pointer_y=y;
     for(unsigned dy=0;dy<18&&y+dy<fb->height;dy++){
@@ -148,6 +153,21 @@ void fb_pointer_show(uint64_t x,uint64_t y){
         }
     }
     pointer_visible=true;
+}
+
+/* Compose beneath the cursor without erasing it from the displayed frame. */
+static void pointer_background(uint32_t*pixels){
+    if(!pointer_visible)return;
+    for(unsigned y=0;y<18&&pointer_y+y<fb->height;y++)
+        for(unsigned x=0;x<12&&pointer_x+x<fb->width;x++)pixels[(pointer_y+y)*fb->width+pointer_x+x]=pointer_saved[y][x];
+}
+static void pointer_overlay(uint32_t*pixels){
+    if(!pointer_visible)return;
+    for(unsigned y=0;y<18&&pointer_y+y<fb->height;y++)for(unsigned x=0;x<12&&pointer_x+x<fb->width;x++){
+        uint32_t*p=&pixels[(pointer_y+y)*fb->width+pointer_x+x];pointer_saved[y][x]=*p;
+        bool arrow=y<13&&x<=y/2,stem=y>=10&&y<18&&x>=3&&x<=5;
+        if(arrow||stem)*p=native_colour(x==0||x==y/2||y==17?0x101318:0xffffff);
+    }
 }
 
 void fb_text(uint64_t x, uint64_t y, const char *text, uint32_t rgb, unsigned scale) {

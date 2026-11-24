@@ -9,6 +9,13 @@
 
 static struct service_info units[SERVICE_MAX];
 static uint32_t count;
+static bool safe_mode;
+bool service_safe_mode(void){return safe_mode;}
+bool service_enter_safe_mode(void){
+    if(!service_stop_all())return false;
+    safe_mode=true;for(uint32_t i=0;i<count;i++)units[i].enabled=false;
+    LOG_INFO("safe mode: background services disabled until reboot");return true;
+}
 
 void service_resume_after_pause(uint64_t milliseconds){
     /* The kernel login screen suspends all user tasks. Preserve heartbeat age,
@@ -26,11 +33,11 @@ static void define(const char*name,const char*executable,const char*account,bool
 
 static bool load_unit(const char*path){struct config_document d;if(!config_load(path,1,0,&d))return false;const char*name=config_get(&d,"name"),*executable=config_get(&d,"executable"),*account=config_get(&d,"account"),*restart=config_get(&d,"restart");uint32_t timeout=decimal(config_get(&d,"heartbeat_ms"),2000),limit=decimal(config_get(&d,"restart_limit"),3);if(!name||!executable||!account||!restart||(!equal(restart,"always")&&!equal(restart,"never"))||timeout<500||timeout>30000||limit>10||count>=SERVICE_MAX)return false;define(name,executable,account,equal(restart,"always"),timeout,limit);return true;}
 bool service_init(void){count=0;return load_unit("/system/services/system-logger.svc")&&load_unit("/system/services/device-manager.svc");}
-int service_start(const char*name){int i=find(name);if(i<0)return-1;struct service_info*u=&units[i];if(u->state==SERVICE_RUNNING||u->state==SERVICE_STARTING)return 0;const struct account_info*a=account_named(u->account);struct vfs_stat st;if(!a||a->type!=ACCOUNT_SERVICE||a->configured||vfs_stat_path(u->executable,&st)||st.directory||!(st.mode&0111))return-1;u->state=SERVICE_STARTING;int pid=process_spawn_service(u->executable,a->uid,a->gid);if(pid<0){u->state=SERVICE_FAILED;u->last_status=pid;LOG_ERROR("service spawn failed");return-1;}u->pid=(uint32_t)pid;u->state=SERVICE_RUNNING;u->manual_stop=false;u->started_ms=hardware_uptime_ms();u->last_heartbeat_ms=u->started_ms;lifecycle("started",u->name);return 0;}
+int service_start(const char*name){if(safe_mode){LOG_WARN("safe mode refused service start");return-1;}int i=find(name);if(i<0)return-1;struct service_info*u=&units[i];if(u->state==SERVICE_RUNNING||u->state==SERVICE_STARTING)return 0;const struct account_info*a=account_named(u->account);struct vfs_stat st;if(!a||a->type!=ACCOUNT_SERVICE||a->configured||vfs_stat_path(u->executable,&st)||st.directory||!(st.mode&0111))return-1;u->state=SERVICE_STARTING;int pid=process_spawn_service(u->executable,a->uid,a->gid);if(pid<0){u->state=SERVICE_FAILED;u->last_status=pid;LOG_ERROR("service spawn failed");return-1;}u->pid=(uint32_t)pid;u->state=SERVICE_RUNNING;u->manual_stop=false;u->started_ms=hardware_uptime_ms();u->last_heartbeat_ms=u->started_ms;lifecycle("started",u->name);return 0;}
 int service_stop(const char*name){int i=find(name);if(i<0)return-1;struct service_info*u=&units[i];if(u->state==SERVICE_RUNNING&&!process_stop_service(u->pid))return-1;u->pid=0;u->state=SERVICE_STOPPED;u->manual_stop=true;lifecycle("stopped",u->name);return 0;}
 int service_restart(const char*name){int i=find(name);if(i<0)return-1;if(service_stop(name))return-1;units[i].restarts++;return service_start(name);}
-bool service_ensure_started(void){bool ok=true;for(uint32_t i=0;i<count;i++){struct service_info*u=&units[i];if(!u->enabled||u->state==SERVICE_RUNNING||u->manual_stop)continue;if(u->state==SERVICE_FAILED){if(!u->restart_always||u->restarts>=u->restart_limit){ok=false;continue;}u->restarts++;}if(service_start(u->name))ok=false;}return ok;}
-bool service_supervise(uint64_t now){bool ok=true;for(uint32_t i=0;i<count;i++){struct service_info*u=&units[i];if(u->state==SERVICE_RUNNING&&now-u->last_heartbeat_ms>u->heartbeat_timeout_ms){process_stop_service(u->pid);u->pid=0;u->state=SERVICE_FAILED;u->last_status=-110;lifecycle("heartbeat-timeout",u->name);}if(u->state==SERVICE_FAILED&&!u->manual_stop){if(!u->restart_always||u->restarts>=u->restart_limit){ok=false;continue;}u->restarts++;if(service_start(u->name))ok=false;}}return ok;}
+bool service_ensure_started(void){if(safe_mode)return true;bool ok=true;for(uint32_t i=0;i<count;i++){struct service_info*u=&units[i];if(!u->enabled||u->state==SERVICE_RUNNING||u->manual_stop)continue;if(u->state==SERVICE_FAILED){if(!u->restart_always||u->restarts>=u->restart_limit){ok=false;continue;}u->restarts++;}if(service_start(u->name))ok=false;}return ok;}
+bool service_supervise(uint64_t now){if(safe_mode)return true;bool ok=true;for(uint32_t i=0;i<count;i++){struct service_info*u=&units[i];if(u->state==SERVICE_RUNNING&&now-u->last_heartbeat_ms>u->heartbeat_timeout_ms){process_stop_service(u->pid);u->pid=0;u->state=SERVICE_FAILED;u->last_status=-110;lifecycle("heartbeat-timeout",u->name);}if(u->state==SERVICE_FAILED&&!u->manual_stop){if(!u->restart_always||u->restarts>=u->restart_limit){ok=false;continue;}u->restarts++;if(service_start(u->name))ok=false;}}return ok;}
 void service_heartbeat(uint32_t pid,uint64_t now){for(uint32_t i=0;i<count;i++)if(units[i].pid==pid&&units[i].state==SERVICE_RUNNING){units[i].last_heartbeat_ms=now;if(equal(units[i].name,"system-logger"))log_service_tick();else if(equal(units[i].name,"device-manager"))device_manager_scan();service_supervise(now);return;}}
 void service_process_exited(uint32_t pid,int status){for(uint32_t i=0;i<count;i++)if(units[i].pid==pid){units[i].pid=0;units[i].last_status=status;units[i].state=units[i].restart_always?SERVICE_FAILED:SERVICE_STOPPED;lifecycle("exited",units[i].name);return;}}
 bool service_stop_all(void){bool ok=true;for(uint32_t i=0;i<count;i++)if(units[i].state==SERVICE_RUNNING&&service_stop(units[i].name))ok=false;return ok;}

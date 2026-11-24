@@ -31,7 +31,7 @@
 
 __attribute__((used, section(".limine_requests")))
 static volatile uint64_t base_revision[] = LIMINE_BASE_REVISION(6);
-static bool text_recovery;
+static bool text_recovery,safe_mode;
 __attribute__((used, section(".limine_requests")))
 static volatile struct limine_executable_cmdline_request cmdline_request = {
     .id = LIMINE_EXECUTABLE_CMDLINE_REQUEST_ID, .revision = 0
@@ -454,6 +454,7 @@ void kmain(void) {
     if (!LIMINE_BASE_REVISION_SUPPORTED(base_revision)) machine_halt();
     const char *options=cmdline_request.response?cmdline_request.response->cmdline:"";
     bool serial_only=options&&streq(options,"recovery-serial");
+    safe_mode=options&&streq(options,"safe");
     text_recovery=serial_only||(options&&streq(options,"recovery"));
     if(serial_only||!framebuffer_request.response||!framebuffer_request.response->framebuffer_count||
        !fb_init(framebuffer_request.response->framebuffers[0]))text_recovery=true;
@@ -481,10 +482,12 @@ void kmain(void) {
     if(restored!=2){if(text_recovery)recovery_setup();else{first_boot_setup();show_initial_recovery_key();}}
     if(!checkpoint_save()){console_init();console_write("INITIAL DATA DISK SAVE FAILED.\n");machine_halt();}
     if(text_recovery)recovery_shell();
+    if(safe_mode&&!service_enter_safe_mode())recovery_shell();
     for(;;){
         graphical_login();
         console_init();
-        desktop_start();
+        if(safe_mode)console_write("AXIOM SAFE MODE: desktop and background services disabled.\nReboot normally to restore them.\n");
+        else desktop_start();
         LOG_INFO("launching user-space init and shell");
         LOG_INFO("session processes inherit authenticated credentials");
         int status=process_launch_init();

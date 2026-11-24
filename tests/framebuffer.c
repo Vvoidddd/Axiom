@@ -12,7 +12,14 @@ int main(void){
     for(unsigned y=0;y<8;y++)for(unsigned x=0;x<12;x++)assert(pixels[y*12+x]==(x>=2&&x<5&&y>=2&&y<5?0xabcdef:0x12345678));
     assert(fb_begin_frame(buffer,64));fb_rect(0,0,1,1,1);fb_rect(7,7,1,1,2);fb_present();
     assert(pixels[0]==1&&pixels[7*12+7]==2&&pixels[3*12+3]==0xabcdef&&pixels[6*12+6]==0x12345678);
-    uint32_t saved[96];memcpy(saved,pixels,sizeof(saved));fb_pointer_show(6,6);assert(fb_begin_frame(buffer,64));fb_present();assert(!memcmp(saved,pixels,sizeof(saved)));
+    uint32_t saved[96];memcpy(saved,pixels,sizeof(saved));fb_pointer_show(6,6);
+    uint32_t cursor=pixels[6*12+6];pixels[6*12+6]^=1;
+    for(unsigned i=0;i<1000;i++)fb_pointer_show(6,6);
+    assert(pixels[6*12+6]==(cursor^1));pixels[6*12+6]=cursor; // Idle polls perform no framebuffer writes.
+    assert(fb_begin_frame(buffer,64));assert(pixels[6*12+6]==cursor);
+    fb_rect(6,6,1,1,0xabcdef);fb_pointer_hide();assert(pixels[6*12+6]==cursor);
+    fb_present();assert(pixels[6*12+6]==cursor);fb_pointer_hide();saved[6*12+6]=0xabcdef;
+    assert(!memcmp(saved,pixels,sizeof(saved)));
     fb_clip(UINT64_MAX,UINT64_MAX,UINT64_MAX,UINT64_MAX);fb_clear(0);assert(!memcmp(saved,pixels,sizeof(saved)));fb_clip_reset();
     puts("PASS: buffered presentation, clipping, pitch padding, overflow bounds and pointer restoration");
 }
